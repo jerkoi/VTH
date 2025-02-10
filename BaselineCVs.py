@@ -1,4 +1,4 @@
-s#Importing libraries- numpy, odeint, error function, matplotlib
+#Importing libraries- numpy, odeint, error function, matplotlib
 import numpy as np
 from scipy.integrate import odeint
 from scipy.special import erf
