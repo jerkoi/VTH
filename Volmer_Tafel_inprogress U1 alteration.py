@@ -12,12 +12,12 @@ cmax = 7.5*10e-10 #mol*cm-2*s-1
 # Model Parameters
 A = 1*10**2
 k1 = A*cmax
-beta = 0.5 #symmetric factor
+beta = 0.025
 GHad = F * -0.35 #free energy of hydrogen adsorption
 UpperV = 0.60
 LowerV = 0.1
 scanrate = 0.025  #scan rate in V/s
-timescan = ((UpperV-LowerV)/(scanrate))
+timescan = (UpperV-LowerV)/(scanrate)
 t = np.arange(0.0, 2*timescan, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
@@ -26,6 +26,7 @@ duration = [0, endtime]
 rate_index = []
 time_index = [t]
 U0_index = []
+U1_index = []
 U11_index = []
 U12_index = []
 j0_index = []
@@ -53,15 +54,16 @@ def potential(x):
 def eqpot(theta):
     theta = np.asarray(theta)
     thetaA_Star, thetaA_H = theta # unpack surface coverage
-    U0 = (-GHad/F) + (RT*np.log(thetaA_Star/thetaA_H))/F #volmer
+    #U0 = (-GHad/F) + (RT*np.log(thetaA_Star/thetaA_H))/F #volmer
     U1_1 = (-GHad/(2*F))
-    U1_2 = (RT*np.log(thetaA_Star**2/thetaA_H**2))/(2*F) #tafel
+    U1_2 = (RT*np.log(thetaA_Star/thetaA_H))/F #tafel
     U1 = U1_1 + U1_2 #tafel
-    U0_index.append(U0)
+    #U0_index.append(U0)
+    U1_index.append(U1)
     U11_index.append(U1_1)
     U12_index.append(U1_2)
     #U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
-    return U0, U1
+    return U1
 
 #reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
 #r0 is volmer step, r1 is tafel step
@@ -69,26 +71,26 @@ def rates(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U0, U1 = eqpot(theta)
-    j0 = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT)
-    exp1_1 = np.exp(-(beta) * F * (V - U0) / RT)
-    exp2_1 = np.exp((1 - beta) * F * (V - U0) / RT)
-    r0 =  j0 * (exp1_1 - exp2_1) #volmer rate
+    U1 = eqpot(theta)
+    # j0 = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT)
+    # exp1_1 = np.exp(-(beta) * F * (V - U0) / RT)
+    # exp2_1 = np.exp((1 - beta) * F * (V - U0) / RT)
+    # r0 =  j0 * (exp1_1 - exp2_1) #volmer rate
     j1 = k1 * (thetaA_star ** (2*beta)) * (thetaA_H ** (2 - 2*beta)) * np.exp(beta * GHad / RT)
-    exp1_2 = np.exp(((1-beta)*2*F*(V - U1)) / RT)
-    exp2_2 = np.exp(((beta)*2*F*(V - U1)) / RT)
+    exp1_2 = np.exp((1 - beta) * 2 * F * (V - U1) / RT)
+    exp2_2 = np.exp(-(beta) * 2 * F * (V - U1) / RT)
     r1 = j1 * (exp1_2 - exp2_2) #tafel rate
-    #j0_index.append(j0)
-    #exp11_index.append(exp1_1)
-    #exp21_index.append(exp2_1)
+    # j0_index.append(j0)
+    # exp11_index.append(exp1_1)
+    # exp21_index.append(exp2_1)
     j1_index.append(j1)
     exp12_index.append(exp1_2)
     exp22_index.append(exp2_2)
-    return r0, r1
+    return r1
 
 def sitebal(t, theta):
-       r0, r1 = rates(t, theta)
-       dthetadt = [(r1 - r0) / cmax, (r0 - r1) / cmax] # rate of change of empty sites and Hads
+       r1 = rates(t, theta)
+       dthetadt = [(r1) / cmax, (-r1) / cmax] # rate of change of empty sites and Hads
        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
@@ -186,16 +188,17 @@ thetaA_H_flat = thetaA_H.flatten()
 data = {
     "Time (s)": t,
     "Voltage (V)": V,
-    "Eq Potential Volmer": U0_index[:len(t)],  # Include time as a reference
+    #"Eq Potential Volmer": U0_index[:len(t)],
+    "Eq Potential Tafel": U1_index[:len(t)],  # Include time as a reference
     "Eq Potential TGad": U11_index[:len(t)],
     "Eq Potential Exponential": U12_index[:len(t)],   # Include time as a reference
-    "R0": rate_vals_flat[:len(t)],                      # Reaction rate values
+    #"R0": rate_vals_flat[:len(t)],                      # Reaction rate values
     "ThetaA_Star": thetaA_Star_flat[:len(t)],           # Surface coverage of empty sites
     "ThetaA_H": thetaA_H_flat[:len(t)],                 # Same for exponential terms
-    "J0": j0_index[:len(t)],
+    #"J0": j0_index[:len(t)],
     "J1": j1_index[:len(t)],
-    "Exp1 1": exp11_index[:len(t)],
-    "Exp2 1": exp21_index[:len(t)],
+    # "Exp1 1": exp11_index[:len(t)],
+    # "Exp2 1": exp21_index[:len(t)],
     "Exp1 2": exp12_index[:len(t)],
     "Exp2 2": exp22_index[:len(t)],                         
 }
