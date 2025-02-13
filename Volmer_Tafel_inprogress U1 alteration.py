@@ -12,7 +12,7 @@ cmax = 7.5*10e-10 #mol*cm-2*s-1
 # Model Parameters
 A = 1*10**2
 k1 = A*cmax
-beta = 0.025
+beta = 0.5
 GHad = F * -0.35 #free energy of hydrogen adsorption
 UpperV = 0.60
 LowerV = 0.1

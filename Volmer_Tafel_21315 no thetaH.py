@@ -82,21 +82,21 @@ def rates(t, theta):
     exp1_1 = np.exp(-(beta) * F * (V - U0) / RT)
     exp2_1 = np.exp((1 - beta) * F * (V - U0) / RT)
     r0 =  j0 * (exp1_1 - exp2_1) #volmer rate
-    j1 = k1 * (thetaA_star ** (2*beta)) * (thetaA_H ** (2 - 2*beta)) * np.exp(beta * GHad / RT)
-    exp1_2 = np.exp(((1-beta)*2*F*(V - U1)) / RT)
-    exp2_2 = np.exp(((beta)*2*F*(V - U1)) / RT)
-    r1 = j1 * (exp1_2 - exp2_2) #tafel rate
+    # j1 = k1 * (thetaA_star ** (2*beta)) * (thetaA_H ** (2 - 2*beta)) * np.exp(beta * GHad / RT)
+    # exp1_2 = np.exp(((1-beta)*2*F*(V - U1)) / RT)
+    # exp2_2 = np.exp(((beta)*2*F*(V - U1)) / RT)
+    # r1 = j1 * (exp1_2 - exp2_2) #tafel rate
     j0_index.append(j0)
     exp11_index.append(exp1_1)
     exp21_index.append(exp2_1)
-    j1_index.append(j1)
-    exp12_index.append(exp1_2)
-    exp22_index.append(exp2_2)
-    return r0, r1
+    # j1_index.append(j1)
+    # exp12_index.append(exp1_2)
+    # exp22_index.append(exp2_2)
+    return r0
 
 def sitebal(t, theta):
-       r0, r1 = rates(t, theta)
-       dthetadt = [(r1 - r0) / cmax, (r0 - r1) / cmax] # rate of change of empty sites and Hads
+       r0 = rates(t, theta)
+       dthetadt = [(-r0) / cmax, (r0) / cmax] # rate of change of empty sites and Hads
        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
@@ -199,7 +199,7 @@ data = {
     "U11 Tafel Gad": U11_index[:len(t)],
     "U12 Tafel Exp": U12_index[:len(t)],   # Include time as a reference
     "R0": rate_vals_flat1[:len(t)],                     # Reaction rate values for R0
-    "R1": rate_vals_flat2[:len(t)],                      # Reaction rate values for R1
+    # "R1": rate_vals_flat2[:len(t)],                      # Reaction rate values for R1
     "ThetaA_Star": thetaA_Star_flat[:len(t)],           # Surface coverage of empty sites
     "ThetaA_H": thetaA_H_flat[:len(t)],                 # Same for exponential terms
     "J0": j0_index[:len(t)],
