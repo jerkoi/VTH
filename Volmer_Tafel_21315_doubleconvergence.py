@@ -18,7 +18,7 @@ UpperV = 0.60
 LowerV = -0.1
 scanrate = 0.025  #scan rate in V/s
 timescan = (UpperV-LowerV)/(scanrate)
-t = np.arange(0.0, timescan, scanrate)
+t = np.arange(0.0, 2*timescan, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
 
@@ -96,13 +96,13 @@ def rates(t, theta):
     exp22_index.append(exp2_2)
     r0_index.append(r0)
     r1_index.append(r1)
-    forward = r1-r0
-    backward = r0-r1
-    return forward, backward
+    theta_star_rate = r1-r0
+    theta_H_rate = r0-r1
+    return theta_star_rate, theta_H_rate
 
 def sitebal(t, theta):
-       forward, backward = rates(t, theta)
-       dthetadt = [forward / cmax, backward / cmax] # rate of change of empty sites and Hads
+       theta_star_rate, theta_H_rate = rates(t, theta)
+       dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax] # rate of change of empty sites and Hads
        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
@@ -207,23 +207,23 @@ thetaA_H_flat = thetaA_H.flatten()
 # Create a dictionary to hold the data for the Excel file
 data = {
     "Time (s)": t,
-    # "Voltage (V)": V,
-    # "U0 Volmer": U0_index[:len(t)],
-    # "U0 Volmer Gad": U01_index[:len(t)],
-    # "U0 Volmer Exp": U02_index[:len(t)],  # Include time as a reference
-    # "U1 Tafel": U1_index[:len(t)],
-    # "U11 Tafel Gad": U11_index[:len(t)],
-    # "U12 Tafel Exp": U12_index[:len(t)],   # Include time as a reference                     # Reaction rate values for R0
-    # "ThetaA_Star": thetaA_Star_flat[:len(t)],           # Surface coverage of empty sites
-    # "ThetaA_H": thetaA_H_flat[:len(t)],                 # Same for exponential terms
-    # "J0": j0_index[:len(t)],
-    # "J1": j1_index[:len(t)],
-    # "Exp1 1": exp11_index[:len(t)],
-    # "Exp2 1": exp21_index[:len(t)],
-    # "Exp1 2": exp12_index[:len(t)],
-    # "Exp2 2": exp22_index[:len(t)],
-    # "R0": r0_index[:len(t)],
-    # "R1": r1_index[:len(t)],
+    "Voltage (V)": V,
+    "U0 Volmer": U0_index[:len(t)],
+    "U0 Volmer Gad": U01_index[:len(t)],
+    "U0 Volmer Exp": U02_index[:len(t)],  # Include time as a reference
+    "U1 Tafel": U1_index[:len(t)],
+    "U11 Tafel Gad": U11_index[:len(t)],
+    "U12 Tafel Exp": U12_index[:len(t)],   # Include time as a reference                     # Reaction rate values for R0
+    "ThetaA_Star": thetaA_Star_flat[:len(t)],           # Surface coverage of empty sites
+    "ThetaA_H": thetaA_H_flat[:len(t)],                 # Same for exponential terms
+    "J0": j0_index[:len(t)],
+    "J1": j1_index[:len(t)],
+    "Exp1 1": exp11_index[:len(t)],
+    "Exp2 1": exp21_index[:len(t)],
+    "Exp1 2": exp12_index[:len(t)],
+    "Exp2 2": exp22_index[:len(t)],
+    "R0": r0_index[:len(t)],
+    "R1": r1_index[:len(t)],
     "Rate r0": rate_vals_r0,
     "Rate r1": rate_vals_r1,                   
 }
