@@ -18,7 +18,7 @@ UpperV = 0.60
 LowerV = -0.1
 scanrate = 0.025  #scan rate in V/s
 timescan = (UpperV-LowerV)/(scanrate)
-t = np.arange(0.0, timescan, scanrate)
+t = np.arange(0.0, 2*timescan, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
 
@@ -195,8 +195,8 @@ plt.grid()
 plt.show()
 
 plt.figure(figsize=(8, 6))
-plt.plot(V[1:], rate_forward[1:], 'b')
-plt.plot(V[1:], rate_backward[1:], 'g')
+plt.plot(V[1:], rate_forward[1:], label=r'$r_0$ (rate of hydrogen adsorption)', color = 'g')
+plt.plot(V[1:], rate_backward[1:], label=r'$r_1$ (rate of hydrogen desorption)', color ='b')
 plt.show()
 
 

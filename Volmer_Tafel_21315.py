@@ -78,29 +78,29 @@ def rates(t, theta):
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
     U0, U1 = eqpot(theta)
-    # j0 = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT)
-    # exp1_1 = np.exp(-(beta) * F * (V - U0) / RT)
-    # exp2_1 = np.exp((1 - beta) * F * (V - U0) / RT)
-    # r0 =  j0 * (exp1_1 - exp2_1) #volmer rate
+    j0 = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT)
+    exp1_1 = np.exp(-(beta) * F * (V - U0) / RT)
+    exp2_1 = np.exp((1 - beta) * F * (V - U0) / RT)
+    r0 =  j0 * (exp1_1 - exp2_1) #volmer rate
     j1 = k1 * (thetaA_star ** (2*beta)) * (thetaA_H ** (2 - 2*beta)) * np.exp(beta * GHad / RT)
     exp1_2 = np.exp(((1-beta)*2*F*(V - U1)) / RT)
     exp2_2 = np.exp((-(beta)*2*F*(V - U1)) / RT)
-    r1 = j1 * (exp1_2 - exp2_2)
-    print("J1", j1)
-    print("Exp1_2", exp1_2)
-    print("Exp2_2", exp2_2)
-    print("R1", r1)
+    r1 = j1 * (exp1_2 - exp2_2) #tafel rate
+    # print("J1", j1)
+    # print("Exp1_2", exp1_2)
+    # print("Exp2_2", exp2_2)
+    # print("R1", r1)
     # j0_index.append(j0)
     # exp11_index.append(exp1_1)
     # exp21_index.append(exp2_1)
-    j1_index.append(j1)
-    exp12_index.append(exp1_2)
-    exp22_index.append(exp2_2)
-    return r1
+    # j1_index.append(j1)
+    # exp12_index.append(exp1_2)
+    # exp22_index.append(exp2_2)
+    return r0, r1
 
 def sitebal(t, theta):
-       r1 = rates(t, theta)
-       dthetadt = [(r1) / cmax, (- r1) / cmax] # rate of change of empty sites and Hads
+       r0, r1 = rates(t, theta)
+       dthetadt = [(r1  - r0) / cmax, (r0 - r1) / cmax] # rate of change of empty sites and Hads
        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
