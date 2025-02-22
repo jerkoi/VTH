@@ -58,10 +58,7 @@ def eqpot(theta):
     #volmer eq
     U_V = (-GHad/F) + (RT*np.log(thetaA_star/thetaA_H))/F
     U_V_values.append(U_V)
-
-    #tafel Keq
-    K_T = (partialpH2 * thetaA_star**2) / (thetaA_H**2)
-    return U_V, K_T
+    return U_V
 print('U_V Values:', U_V_values)
 
 #reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
@@ -87,7 +84,7 @@ print('R_T values:', r_T_index)
 
 def sitebal_r0(t, theta):
     r_V, r_T = rates(t, theta)
-    dthetadt = [2*r_T / cmax, r_V / cmax] # [0 = star, 1 = H]
+    dthetadt = [2*r_T - r_V / cmax, r_V - 2*r_T / cmax] # [0 = star, 1 = H]
     return dthetadt
 
 V = np.array([potential(ti) for ti in t])
