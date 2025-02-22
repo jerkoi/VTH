@@ -11,7 +11,7 @@ cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
 A_V = 1*10**2
-A_T = 1*10**2
+A_T = 1*10
 partialpH2 = 1
 k_V = A_V*cmax
 k_T = A_T*cmax
@@ -29,6 +29,7 @@ duration = [0, endtime]
 #Empty indexes
 r_V_index = []
 r_T_index = []
+U_V_values = []
 time_index = [t]
 exp_index = []
 i0_index = []
@@ -53,41 +54,41 @@ def potential(x):
 def eqpot(theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta # unpack surface coverage
-    sqrtP = thetaA_H / thetaA_star
     
     #volmer eq
     U_V = (-GHad/F) + (RT*np.log(thetaA_star/thetaA_H))/F
-    
-    #tafel equation
-    U_T =((RT/F)*np.log(1/sqrtP)) 
+    U_V_values.append(U_V)
 
-    return U_V, U_T
+    #tafel Keq
+    K_T = (partialpH2 * thetaA_star**2) / (thetaA_H**2)
+    return U_V, K_T
+print('U_V Values:', U_V_values)
 
 #reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
 def rates(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U_V, U_T = eqpot(theta) #call function to find U for given theta
-    sqrtP = thetaA_H / thetaA_star
+    U_V = eqpot(theta) #call function to find U for given theta
 
-    ##Volmer
+    ##Volmer rate
     r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT))
 
-    ##Tafel
-    i0 = (k_T * F * theta_max * (sqrtP**beta) * (thetaA_H**(1 - beta)))/(1 + sqrtP)
-    exp = (np.exp((1 - beta) * F * (V - U_T)/RT) - np.exp( -beta * F * (V - U_T) / RT))
-    r_T = i0 * exp
+
+    ##Tafel rate
+    r_T = (k_T * (thetaA_H**2)) - (partialpH2 * (thetaA_star**2))
 
     r_V_index.append(r_V)
     r_T_index.append(r_T)
-    return r_V, r_T
+    return np.array([r_V, r_T]) 
 
+print('R_V values:', r_V_index)
+print('R_T values:', r_T_index)
 
 def sitebal_r0(t, theta):
-       r_V, r_T = rates(t, theta)
-       dthetadt = [r_T / cmax, r_V / cmax] # [0 = star, 1 = H]
-       return dthetadt
+    r_V, r_T = rates(t, theta)
+    dthetadt = [2*r_T / cmax, r_V / cmax] # [0 = star, 1 = H]
+    return dthetadt
 
 V = np.array([potential(ti) for ti in t])
 curr1 = np.empty(len(t), dtype=object)
@@ -99,13 +100,15 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
-soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t)
+soln = solve_ivp(sitebal_r0, [0, endtime], theta0, t_eval=t, method='RK45', rtol=1e-8, atol=1e-10)
 
+
+print("Theta values:\n", soln.y)
 print("soln.t shape:", soln.t.shape)
 print("soln.y shape:", soln.y.shape)
 
-#Plotting U0 as a function of time
-U_V_values, U_T_values = zip(*[eqpot([theta_star, theta_H]) for theta_star, theta_H in zip(soln.y[0], soln.y[1])])
+#Unpacking Volmer eq pot values
+U_V_values = [eqpot([theta_star, theta_H]) for theta_star, theta_H in zip(soln.y[0], soln.y[1])]
 
 
 # Extract coverages from odeint
@@ -143,7 +146,7 @@ plt.xlabel('Time (s)')
 plt.ylabel('Coverage')
 plt.grid()
 plt.legend()
-plt.title(f'Surface Coverage vs. Time, A = {A1}')
+plt.title('Surface Coverage vs. Time')
 plt.show()
 
 # #plotting U0 and V vs time
@@ -164,7 +167,7 @@ plt.plot(t[1:], r0_vals[1:], label=r'$r_0$ (rate of hydrogen adsorption)', color
 plt.xlabel('Time (s)')
 plt.ylabel(r'$r_0$ (mol/cm²/s)')
 plt.legend()
-plt.title(f'Reaction Rate vs. Time, A = {A1}')
+plt.title('Reaction Rate vs. Time')
 plt.grid()
 plt.show()
 
@@ -172,7 +175,7 @@ plt.show()
 plt.plot(V[10:20000], curr1[10:20000], 'b')
 plt.xlabel('V vs RHE(V)')
 plt.ylabel('Kinetic current (mA/cm2)')
-plt.title(f'Kinetic Current vs Potential, A = {A1}')
+plt.title('Kinetic Current vs Potential')
 plt.grid()
 plt.show()
 
