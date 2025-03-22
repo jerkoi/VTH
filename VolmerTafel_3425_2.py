@@ -10,14 +10,13 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-A_V = 1*10**2
-A_T = 1*10
-partialpH2 = 1
-k_V = A_V*cmax
-k_T = A_T*cmax
+A = 1*10**2
+k1 = A*cmax
+k_T = cmax*10**-2
+partialPH2 = 1
 beta = 0.5
-GHad = F * -0.35 #free energy of hydrogen adsorption
-UpperV = 0.60
+GHad = F * -0.15    #free energy of hydrogen adsorption
+UpperV = 0.6
 LowerV = 0.1
 scanrate = 0.025 #scan rate in V/s
 timestep = 0.01
@@ -27,20 +26,17 @@ endtime = t[-1]
 duration = [0, endtime]
 
 #Empty indexes
-r_V_index = []
-r_T_index = []
-U_V_values = []
+rate_index = []
 time_index = [t]
-exp_index = []
-i0_index = []
+r_T_index = []
+r_V_index = []
 U0_index = []
 print("Time size: ", np.size(time_index))
 
 #Initial conditions
-theta_max = 1
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
-thetaA_Star0 = theta_max - thetaA_H0  # Initial coverage of empty sites
-theta0 = np.array([thetaA_Star0, thetaA_H0])
+thetaA_star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
+theta0 = np.array([thetaA_star0, thetaA_H0])
 
 #Linear sweep voltammetry- defining a potential as a function of time
 def potential(x):
@@ -54,44 +50,40 @@ def potential(x):
 def eqpot(theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta # unpack surface coverage
-    
-    #volmer eq
-    U_V = (-GHad / F) + (RT * np.log(thetaA_star  /thetaA_H)) / F
-    U_V_values.append(U_V)
-
-    #tafel Keq
-    k_T = (GHad / F) + (partialpH2 * thetaA_star**2) / (thetaA_H**2)
-
-    return U_V, k_T
-
-
-print('U_V Values:', U_V_values)
+    U0 = (-GHad/F) + (RT*np.log(thetaA_star/thetaA_H))/F 
+    U0_index.append(U0)
+    #U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
+    return U0
 
 #reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
-def rates(t, theta):
+def rates_r0(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U_V, k_T = eqpot(theta) #call function to find U for given theta
+    U0 = eqpot(theta) #call function to find U for given theta
 
-    ##Volmer rate
-    r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT))
-
-
-    ##Tafel rate
-    r_T = np.exp(-GHad / RT) * ((k_T * (thetaA_H**2)) - (partialpH2 * (thetaA_star**2)))
-
+    ##Volmer equations
+    r_V = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U0) / RT) - np.exp((1 - beta) * F * (V - U0) / RT))
     r_V_index.append(r_V)
-    r_T_index.append(r_T)
-    return r_T, r_V
+    #print('Theta before Tafel', thetaA_star, thetaA_H)
 
-print('R_V values:', r_V_index)
-print('R_T values:', r_T_index)
+    #Tafel Rate
+    pt_1 = ((thetaA_H**2))
+    pt_2 = ((thetaA_star**2) * (partialPH2) * np.exp((-2*GHad) / RT))
+    r_T =  k_T * (pt_1 - pt_2)
+    #r_T = 0
+    #print('Theta after Tafel', thetaA_star, thetaA_H)
+    r_T_index.append(r_T)
+
+
+    return r_V, r_T
+print('GHad exp value:' , np.exp((-2*GHad) / RT))
+print('GHad value', GHad*-2)
 
 def sitebal_r0(t, theta):
-    r_V, r_T = rates(t, theta)
-    dthetadt = [2*r_T - r_V / cmax, r_V - 2*r_T / cmax] # [0 = star, 1 = H]
-    return dthetadt
+       r_V, r_T = rates_r0(t, theta)
+       dthetadt = [((-2*r_V) + r_T) / cmax,((2*r_V) - r_T) / cmax] # [0 = star, 1 = H]
+       return dthetadt
 
 V = np.array([potential(ti) for ti in t])
 curr1 = np.empty(len(t), dtype=object)
@@ -103,25 +95,23 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
-soln = solve_ivp(sitebal_r0, [0, endtime], theta0, t_eval=t, method='RK45')
+soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method = 'BDF')
+#print('Solution.t shape', soln.t.shape, 'Solution.y shape', soln.y.shape)
 
+#Plotting U0 as a function of time
+U0_values = [eqpot(theta) for theta in soln.y.T]
 
-print("Theta values:\n", soln.y)
-print("soln.t shape:", soln.t.shape)
-print("soln.y shape:", soln.y.shape)
-
-#Unpacking Volmer eq pot values
-U_V_values = [eqpot([theta_star, theta_H]) for theta_star, theta_H in zip(soln.y[0], soln.y[1])]
-
-
+print("solution.y shape", soln.y.shape)
 # Extract coverages from odeint
 thetaA_Star = soln.y[0, :]
 thetaA_H = soln.y[1, :]
 
-#calculates rate based on theta values calculated during odeint, zips it with time given from potential(x) function
-r0_vals = np.array([rates(time, theta) for time, theta in zip(t, soln.y.T)]) 
-print("Rate size:", np.size(r0_vals))
-curr1 = r0_vals * -F
+#r_vals is the r_V
+r_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)]) 
+curr1 = (r_vals[:, 0] + r_vals[:,1]) * -F
+
+#print("Rate size:", np.size(r_V_vals))
+
 
 # # Find the indices of the maximum and minimum values for rate
 # max_curr_index = np.argmax(curr1)
@@ -143,68 +133,86 @@ curr1 = r0_vals * -F
 ###########################################################################################################################
 #Plot results
 plt.figure(figsize=(8, 6))
+plt.plot(t, V, label='Voltage (V)', color='red')
+plt.xlabel('Time (s)')
+plt.ylabel('Voltage (V)')
+plt.grid()
+plt.show()
+
+plt.figure(figsize=(8, 6))
 plt.plot(t, thetaA_Star, label=r'$\theta_A^*$ (empty sites)', color='magenta')
-plt.plot(t, thetaA_H, label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
+plt.plot(t[1:], thetaA_H[1:], label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
 plt.xlabel('Time (s)')
 plt.ylabel('Coverage')
 plt.grid()
 plt.legend()
-plt.title('Surface Coverage vs. Time')
+plt.title(f'Surface Coverage vs. Time, A = {A}')
 plt.show()
-
-# #plotting U0 and V vs time
-# plt.figure(figsize=(8, 6))
-# plt.plot(t, U0_values, label='Equilibrium Potential (V)', color='orange')
-# plt.plot(t, [potential(ti) for ti in t], label="Potential (V)", color = 'blue')
-# plt.xlabel('Time (s)')
-# plt.ylabel('Potential (V)')
-# plt.title('Potential vs. Time')
-# plt.grid()
-# plt.legend()
-# plt.show()
-
 
 #Plot of reaction rate vs time
 plt.figure(figsize=(8, 6))
-plt.plot(t[1:], r0_vals[1:], label=r'$r_0$ (rate of hydrogen adsorption)', color='green')
+plt.plot(t[1:], r_vals[1:], label=r'$r_0$ (rate of hydrogen adsorption)', color='green')
 plt.xlabel('Time (s)')
 plt.ylabel(r'$r_0$ (mol/cm²/s)')
 plt.legend()
-plt.title('Reaction Rate vs. Time')
+plt.title(f'Reaction Rate vs. Time, A = {A}')
 plt.grid()
 plt.show()
 
 # plot kinetic current desnity as a function of potential
-plt.plot(V[10:20000], curr1[10:20000], 'b')
+plt.plot(V[10:20000], curr1[10:20000], color = 'g')
 plt.xlabel('V vs RHE(V)')
 plt.ylabel('Kinetic current (mA/cm2)')
-plt.title('Kinetic Current vs Potential')
+plt.title(f'Kinetic Current vs Potential, A = {A}')
 plt.grid()
 plt.show()
 
+# #plot of exp1 and exp2 (first exponential term and second exponential term in rate eq) vs time
+# plt.plot(t, exp1_index[:len(t)], label='Exp1')
+# plt.plot(t, exp2_index[:len(t)], label = 'Exp2')
+# plt.ylim(0.8,1.2)
+# plt.xlim(1, 2)
+# plt.ylabel('Exp Value')
+# plt.xlabel('Time (s)')
+# plt.grid()
+# plt.legend()
+# plt.title('Exp Terms vs Time')
+# plt.show()
 
-# print('Exp1:', len(exp1_index))
-# print('Exp2:', len(exp2_index))
-# print('U0:',len(U0_index))
 
-# #Create a dictionary to hold the data for excel file 
-# data = {
-#     "Time (s)": t,
-#     "Voltage (V)": V,  
-#     "Eq Potential Volmer": U_V_values[:len(t)],  # Equilibrium potential values
-#     "Eq Potential Tafel": U_T_values[:len(t)],  # Equilibrium potential values
-#     "Theta Star": thetaA_Star[:len(t)],  # Surface coverage of empty sites
-#     "Theta H": thetaA_H[:len(t)],   
-#     "Tafel Rate": r_T_index[:len(t)],
-#     "Volmer Rate": r_V_index[:len(t)],          
-# }
+# #plot of exchange current density (J0) from rate eq vs time
+# plt.plot(t, j0_index[:len(t)])
+# plt.ylabel('Exchange Current Density')
+# plt.xlabel('Time (s)')
+# plt.title('Exchange Current Density vs Time')
+# plt.show()
 
-# # Convert the dictionary to a DataFrame
-# df = pd.DataFrame(data)
+# print('Time shape', t.shape)
+# print('Voltage shape', V.shape)
+# print('Volmer Rate before int size', len(r_V_index))
+# print('Tafel Rate before int size', len(r_T_index))
+# print('ThetaA_Star shape', thetaA_Star.shape)
+# print('ThetaA_H shape', thetaA_H.shape)
+# print('r_V shape', r_vals.shape)
+# print('r_T shape', r_vals.shape)
 
-# # Export the DataFrame to an Excel file
-# df.to_excel("reaction_data.xlsx", index=False)
+#Create a dictionary to hold the data for excel file 
+data = {
+    "Time (s)": t,
+    "Voltage (V)": V,
+    "Rate values": r_vals[:, 0],               # Volmer Reaction rate values
+    "ThetaA_Star": thetaA_Star,
+    "ThetaA_H": thetaA_H,
+    "Current": curr1[:, 0],
+    "Other Current": curr1[:, 1]
+}
 
-# print("Data exported successfully to reaction_data.xlsx")
+# Convert the dictionary to a DataFrame
+df = pd.DataFrame(data)
+
+# Export the DataFrame to an Excel file
+df.to_excel("reaction_data.xlsx", index=False)
+
+print("Data exported successfully to reaction_data.xlsx")
 
 

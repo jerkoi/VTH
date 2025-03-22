@@ -10,8 +10,8 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-A_V = 1*10**2
-A_T = 1*10
+A_V = 1*10**2 * cmax
+A_T = 1*10**2 * cmax
 partialpH2 = 1
 k_V = A_V*cmax
 k_T = A_T*cmax
@@ -59,10 +59,7 @@ def eqpot(theta):
     U_V = (-GHad / F) + (RT * np.log(thetaA_star  /thetaA_H)) / F
     U_V_values.append(U_V)
 
-    #tafel Keq
-    k_T = (GHad / F) + (partialpH2 * thetaA_star**2) / (thetaA_H**2)
-
-    return U_V, k_T
+    return U_V
 
 
 print('U_V Values:', U_V_values)
@@ -72,25 +69,25 @@ def rates(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U_V, k_T = eqpot(theta) #call function to find U for given theta
+    U_V = eqpot(theta) #call function to find U for given theta
 
     ##Volmer rate
     r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT))
 
 
     ##Tafel rate
-    r_T = np.exp(-GHad / RT) * ((k_T * (thetaA_H**2)) - (partialpH2 * (thetaA_star**2)))
+    r_T = A_T * np.exp(-GHad / RT) * ((thetaA_H**2)) - (partialpH2 * (thetaA_star**2))
 
     r_V_index.append(r_V)
-    r_T_index.append(r_T)
-    return r_T, r_V
+    #r_T_index.append(r_T)
+    return r_V, r_T
 
 print('R_V values:', r_V_index)
 print('R_T values:', r_T_index)
 
 def sitebal_r0(t, theta):
     r_V, r_T = rates(t, theta)
-    dthetadt = [2*r_T - r_V / cmax, r_V - 2*r_T / cmax] # [0 = star, 1 = H]
+    dthetadt = [2*r_V - r_T / cmax, r_T - 2*r_V / cmax] # [0 = star, 1 = H]
     return dthetadt
 
 V = np.array([potential(ti) for ti in t])
@@ -103,7 +100,7 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
-soln = solve_ivp(sitebal_r0, [0, endtime], theta0, t_eval=t, method='RK45')
+soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='RK45')
 
 
 print("Theta values:\n", soln.y)
