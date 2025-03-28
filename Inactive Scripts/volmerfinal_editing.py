@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.integrate import solve_ivp
+from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 import pandas as pd
 plt.rcParams.update({'font.size': 14})
@@ -7,21 +7,18 @@ plt.rcParams.update({'font.size': 14})
 # Physical Constants
 RT = 8.314*298 #ideal gas law times temperature
 F = 96485.0 #Faraday constant, C/mol
-cmax = 7.5*10e-10 #mol*cm-2*s-1
+cmax = 1*10**-10 #mol*cm-2*s-1
 
 # Model Parameters
-A = 1*10**2
+A = 1*10**3
 k1 = A*cmax
 beta = 0.5
 GHad = F * -0.35 #free energy of hydrogen adsorption
 UpperV = 0.60
-LowerV = 0.1
+LowerV = -0.1
 scanrate = 0.025 #scan rate in V/s
-timestep = 0.01
 timescan = (UpperV-LowerV)/(scanrate)
 t = np.arange(0.0, 2*timescan, scanrate)
-endtime = t[-1]
-duration = [0, endtime]
 
 #Empty indexes
 rate_index = []
@@ -35,7 +32,7 @@ print("Time size: ", np.size(time_index))
 #Initial conditions
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
-theta0 = np.array([thetaA_Star0, thetaA_H0])
+theta0 = [thetaA_Star0, thetaA_H0]
 
 #Linear sweep voltammetry- defining a potential as a function of time
 def potential(x):
@@ -46,8 +43,8 @@ def potential(x):
     return Vapp
 
 #Function to calculate U and Keq from theta, dG
+#should delta G be negative? Are we using theta as a concentration term?
 def eqpot(theta):
-    theta = np.asarray(theta)
     thetaA_Star, thetaA_H = theta # unpack surface coverage
     U0 = (-GHad/F) + (RT*np.log(thetaA_Star/thetaA_H))/F 
     U0_index.append(U0)
@@ -55,17 +52,27 @@ def eqpot(theta):
     return U0
 
 #reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
-def rates_r0(t, theta):
-    theta = np.asarray(theta)
+#rate_r0 is not the culprit, using the rate equation that works for Ram's code produces the same issues
+def rates_r0(theta, t):
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U0 = eqpot(theta) #call function to find U for given theta
+    U0 = eqpot(theta)
+    # ##Ram's rate equations
+    # j0 = k1*np.exp(beta*GHad/RT)*(thetaA_H**beta)*(thetaA_star**(1-beta))
+    # exp1 = np.exp(-beta*F*(V-U0)/RT)
+    # exp2 = np.exp((1-beta)*F*(V-U0)/RT)
     ##My Rate equations
-    r0 = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U0) / RT) - np.exp((1 - beta) * F * (V - U0) / RT))
+    j0 = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT)
+    exp1 = np.exp(-(beta) * F * (V - U0) / RT)
+    exp2 = np.exp((1 - beta) * F * (V - U0) / RT)
+    j0_index.append(j0)
+    exp1_index.append(exp1)
+    exp2_index.append(exp2)
+    r0 = j0 * (exp1 - exp2)
     return r0
 
-def sitebal_r0(t, theta):
-       r0 = rates_r0(t, theta)
+def sitebal_r0(theta, t):
+       r0 = rates_r0(theta, t)
        dthetadt = [-r0 / cmax, r0 / cmax] # [0 = star, 1 = H]
        return dthetadt
 
@@ -73,77 +80,53 @@ V = np.array([potential(ti) for ti in t])
 curr1 = np.empty(len(t), dtype=object)
 tcurr1= np.empty(len(t), dtype=object)
 
-############################################################################################################################################################
-############################################################################################################################################################
-########################################################## SOLVER ##########################################################################################
-############################################################################################################################################################
-############################################################################################################################################################
+# Solve the ODE
+soln, info = odeint(sitebal_r0, theta0, t, args=(), full_output=True)
 
-soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t)
-
-
+info_df = pd.DataFrame({key: [value] for key, value in info.items()})
+info_df.to_excel("info_output3.xlsx", index=False)
 
 #Plotting U0 as a function of time
-U0_values = [eqpot(theta) for theta in soln.y.T]
+U0_values = [eqpot(theta) for theta in soln]
 
 
 # Extract coverages from odeint
-thetaA_Star = soln.y[0, :]
-thetaA_H = soln.y[1, :]
+thetaA_Star = soln[:, 0]
+thetaA_H = soln[:, 1]
+print("ThetaH Size", np.size(thetaA_H))
 
 #calculates rate based on theta values calculated during odeint, zips it with time given from potential(x) function
-r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)]) 
+r0_vals = np.array([rates_r0(theta, potential(time)) for theta, time in zip(soln, t)]) 
 print("Rate size:", np.size(r0_vals))
 curr1 = r0_vals * -F
 
-# Find the indices of the maximum and minimum values for rate
-max_curr_index = np.argmax(curr1)
-min_curr_index = np.argmin(curr1)
-
-# Find the corresponding times
-time_max_curr = t[max_curr_index]
-time_min_curr = t[min_curr_index]
-
-# Calculate the voltages at these times
-voltage_max_curr = potential(time_max_curr)
-voltage_min_curr = potential(time_min_curr)
-
-# Print the results
-print(f"Voltage at max current: {voltage_max_curr}")
-print(f"Voltage at min current: {voltage_min_curr}")
-
-###########################################################################################################################
-###########################################################################################################################
 #Plot results
 plt.figure(figsize=(8, 6))
 plt.plot(t, thetaA_Star, label=r'$\theta_A^*$ (empty sites)', color='magenta')
 plt.plot(t, thetaA_H, label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
 plt.xlabel('Time (s)')
 plt.ylabel('Coverage')
-plt.grid()
 plt.legend()
-plt.title(f'Surface Coverage vs. Time, A = {A}')
+plt.title('Surface Coverage vs. Time')
+plt.grid()
 plt.show()
 
-#plotting U0 and V vs time
-plt.figure(figsize=(8, 6))
-plt.plot(t, U0_values, label='Equilibrium Potential (V)', color='orange')
-plt.plot(t, [potential(ti) for ti in t], label="Potential (V)", color = 'blue')
-plt.xlabel('Time (s)')
-plt.ylabel('Potential (V)')
-plt.title('Potential vs. Time')
-plt.grid()
-plt.legend()
-plt.show()
-
+##plot of Voltage(V) vs time
+# plt.figure(figsize=(8, 6))
+# plt.plot(t, [potential(ti) for ti in t], label="Potential (V)")
+# plt.xlabel('Time (s)')
+# plt.ylabel('Potential (V)')
+# plt.title('Potential vs. Time')
+# plt.grid()
+# plt.show()
 
 #Plot of reaction rate vs time
 plt.figure(figsize=(8, 6))
-plt.plot(t[1:], r0_vals[1:], label=r'$r_0$ (rate of hydrogen adsorption)', color='green')
+plt.plot(t, r0_vals, label=r'$r_0$ (rate of hydrogen adsorption)', color='green')
 plt.xlabel('Time (s)')
 plt.ylabel(r'$r_0$ (mol/cm²/s)')
 plt.legend()
-plt.title(f'Reaction Rate vs. Time, A = {A}')
+plt.title('Reaction Rate vs. Time')
 plt.grid()
 plt.show()
 
@@ -151,29 +134,29 @@ plt.show()
 plt.plot(V[10:20000], curr1[10:20000], 'b')
 plt.xlabel('V vs RHE(V)')
 plt.ylabel('Kinetic current (mA/cm2)')
-plt.title(f'Kinetic Current vs Potential, A = {A}')
-plt.grid()
+plt.title('Kinetic Current vs Potential')
 plt.show()
 
-# #plot of exp1 and exp2 (first exponential term and second exponential term in rate eq) vs time
-# plt.plot(t, exp1_index[:len(t)], label='Exp1')
-# plt.plot(t, exp2_index[:len(t)], label = 'Exp2')
-# plt.ylim(0.8,1.2)
-# plt.xlim(1, 2)
-# plt.ylabel('Exp Value')
-# plt.xlabel('Time (s)')
-# plt.grid()
-# plt.legend()
-# plt.title('Exp Terms vs Time')
-# plt.show()
+#plot of exp1 (first exponential term in rate eq) vs time
+plt.plot(t, exp1_index[:len(t)])
+plt.ylabel('Exp1')
+plt.xlabel('Time (s)')
+plt.title('Exp1 vs Time')
+plt.show()
 
+#plot of exp2 (second expontential term in rate eq) vs time
+plt.plot(t, exp2_index[:len(t)])
+plt.ylabel('Exp2')
+plt.xlabel('Time (s)')
+plt.title('Exp2 vs Time')
+plt.show()
 
-# #plot of exchange current density (J0) from rate eq vs time
-# plt.plot(t, j0_index[:len(t)])
-# plt.ylabel('Exchange Current Density')
-# plt.xlabel('Time (s)')
-# plt.title('Exchange Current Density vs Time')
-# plt.show()
+#plot of exchange current density (J0) from rate eq vs time
+plt.plot(t, j0_index[:len(t)])
+plt.ylabel('Exchange Current Density')
+plt.xlabel('Time (s)')
+plt.title('Exchange Current Density vs Time')
+plt.show()
 
 print('Exp1:', len(exp1_index))
 print('Exp2:', len(exp2_index))
@@ -200,5 +183,3 @@ df = pd.DataFrame(data)
 df.to_excel("reaction_data.xlsx", index=False)
 
 print("Data exported successfully to reaction_data.xlsx")
-
-

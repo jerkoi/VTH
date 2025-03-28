@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-import pandas as pd
+# import pandas as pd
 plt.rcParams.update({'font.size': 14})
 
 ###########################################################################################################################
@@ -20,8 +20,7 @@ k_V = cmax * 10**2
 k_T = cmax * 10**-2
 partialPH2 = 1
 beta = 0.5
-GHad = F * -0.15 #free energy of hydrogen adsorption
-UpperV = 0.8
+UpperV = 1.0
 LowerV = -0.1
 scanrate = 0.025 #scan rate in V/s
 timestep = 0.01
@@ -30,6 +29,9 @@ t = np.arange(0.0, 2*timescan, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
 
+dGmin = -0.2
+dGmax = -0.15
+period = 0.6
 #Initial conditions
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
@@ -50,8 +52,14 @@ def potential(x):
             Vapp = UpperV - scanrate*(x%((UpperV-LowerV)/(scanrate)))
     return Vapp
 
+def dGvt(t):
+    '''varying deltaG between -0.2 and -0.15 every 10 seconds'''
+
+    return dGmin if (t // period) % 2 == 0 else dGmax
+
+
 #Function to calculate U and Keq from theta, dG
-def eqpot(theta):
+def eqpot(theta, GHad):
     theta = np.asarray(theta)
     thetaA_Star, thetaA_H = theta # unpack surface coverage
     U0 = (-GHad/F) + (RT*np.log(thetaA_Star/thetaA_H))/F 
@@ -63,8 +71,9 @@ def rates_r0(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U0 = eqpot(theta) #call function to find U for given theta
-    
+    GHad = F * dGvt(t)  # Get the current dG value based on time
+    U0 = eqpot(theta, GHad) #call function to find U for given theta
+
     ##Volmer Rate Equation
     r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U0) / RT) - np.exp((1 - beta) * F * (V - U0) / RT))
     
@@ -112,7 +121,7 @@ volmer_rate = r0_vals[:, 0]
 tafel_rate = r0_vals[:, 1]
 
 '''assuming that tafel has an effect on the overall rate.  I wasn't sure about this.  If not, rate should just be volmer step'''
-t_rate = volmer_rate - tafel_rate
+t_rate = volmer_rate
 
 # # Find the indices of the maximum and minimum values for rate
 # max_curr_index = np.argmax(curr1)
@@ -147,15 +156,15 @@ plt.title('Surface Coverage vs. Time')
 plt.show()
 
 
-#Plot of reaction rate vs time
-plt.figure(figsize=(8, 6))
-plt.plot(t[1:], t_rate[1:], label='Total Rate', color='red')
-plt.xlabel('Time (s)')
-plt.ylabel(r'$r_0$ (mol/cm²/s)')
-plt.legend()
-plt.title('Reaction Rate vs. Time')
-plt.grid()
-plt.show()
+# #Plot of reaction rate vs time
+# plt.figure(figsize=(8, 6))
+# plt.plot(t[1:], t_rate[1:], label='Total Rate', color='red')
+# plt.xlabel('Time (s)')
+# plt.ylabel(r'$r_0$ (mol/cm²/s)')
+# plt.legend()
+# plt.title('Reaction Rate vs. Time')
+# plt.grid()
+# plt.show()
 
 # plot kinetic current desnity as a function of potential
 plt.plot(V[10:20000], curr1[10:20000], 'b')
@@ -166,23 +175,23 @@ plt.grid()
 plt.show()
 
 
-#Create a dictionary to hold the data for excel file 
-data = {
-    "Time (s)": t,
-    "Voltage (V)": V[:len(t)],  
-    "Volmer Rate": r0_vals[:len(t), 0],
-    "Tafel Rate": r0_vals[:len(t), 1],
-    "ThetaA_Star": thetaA_Star[:len(t)],
-    "ThetaA_H": thetaA_H[:len(t)],
-    "Current": curr1[:len(t)]
-}
+# #Create a dictionary to hold the data for excel file 
+# data = {
+#     "Time (s)": t,
+#     "Voltage (V)": V[:len(t)],  
+#     "Volmer Rate": r0_vals[:len(t), 0],
+#     "Tafel Rate": r0_vals[:len(t), 1],
+#     "ThetaA_Star": thetaA_Star[:len(t)],
+#     "ThetaA_H": thetaA_H[:len(t)],
+#     "Current": curr1[:len(t)]
+# }
 
-# Convert the dictionary to a DataFrame
-df = pd.DataFrame(data)
+# # Convert the dictionary to a DataFrame
+# df = pd.DataFrame(data)
 
-# Export the DataFrame to an Excel file
-df.to_excel("reaction_data.xlsx", index=False)
+# # Export the DataFrame to an Excel file
+# df.to_excel("reaction_data.xlsx", index=False)
 
-print("Data exported successfully to reaction_data.xlsx")
+# print("Data exported successfully to reaction_data.xlsx")
 
 
