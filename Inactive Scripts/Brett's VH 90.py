@@ -32,7 +32,7 @@ theta_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reducti
 theta_Star0 = 1.0 - theta_H0  # Initial coverage of empty sites
 theta0 = np.array([theta_Star0, theta_H0])
 
-# potential sweep & time 
+# potent    ial sweep & time 
 UpperV = 0.05
 LowerV = -0.3
 scanrate = 0.025  #scan rate in V/s

@@ -16,15 +16,15 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-k_V = cmax * 10**1
+k_V = cmax * 10**2
 k_T = cmax * 10**-2
-k_H = cmax * 10**2
+k_H = cmax * 10**1
 partialPH2 = 1
 beta = 0.5
-GHad = -0.1 * F
+GHad = -0.2 * F
 
 # potential sweep & time 
-UpperV = 0.05
+UpperV = 0.2
 LowerV = -0.3
 scanrate = 0.025  #scan rate in V/s
 timescan = (UpperV-LowerV)/(scanrate)

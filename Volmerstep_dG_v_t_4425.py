@@ -61,8 +61,6 @@ def rates_r0(t, theta):
     U0 = eqpot(theta, GHad) #call function to find U for given theta
     ##Volmer RDS, Heyrovsky / Tafel fast
     r_V = k1 * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U0) / RT) - np.exp((1 - beta) * F * (V - U0) / RT))
-    
-    
     return r_V
 
 def sitebal_r0(t, theta):

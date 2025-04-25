@@ -16,16 +16,15 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-k_V = cmax * 10**1
+k_V = cmax * 10**0
 k_T = cmax * 10**-2
-k_H = cmax * 10**2
+k_H = cmax * 10**-14
 partialPH2 = 1
 beta = 0.5
-GHad = -0.1 * F
 
 # potential sweep & time 
-UpperV = 0.05
-LowerV = -0.3
+UpperV = 1
+LowerV = -1
 scanrate = 0.025  #scan rate in V/s
 timescan = (UpperV-LowerV)/(scanrate)
 max_time = 60
@@ -33,6 +32,11 @@ t = np.arange(0.0, max_time, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
 time_index = [t]
+
+#dG components
+period = 0.5
+dGmin = -0.1
+dGmax = 0.1
 
 #Initial conditions
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
@@ -44,6 +48,11 @@ theta0 = np.array([thetaA_Star0, thetaA_H0])
 ########################################################## FUNCTIONS #######################################################
 ############################################################################################################################
 ############################################################################################################################
+
+def dGvt(t):
+    '''varying deltaG between -0.2 and -0.15 every 10 seconds'''
+
+    return dGmin if (t // period) % 2 == 0 else dGmax
 
 # Ask user for mechanism choice
 while True:
@@ -64,7 +73,7 @@ def potential(x):
 
 
 #Function to calculate U and Keq from theta, dG
-def eqpot(theta):
+def eqpot(theta, GHad):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta # unpack surface coverage
     ##Volmer
@@ -83,8 +92,9 @@ def rates_r0(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    U_V, U_H = eqpot(theta) #call function to find U for given theta
-    
+    GHad = F * dGvt(t)
+    U_V, U_H = eqpot(theta, GHad) #call function to find U for given theta
+
     ##Volmer Rate Equation
     r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT))
     

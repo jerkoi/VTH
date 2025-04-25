@@ -2,6 +2,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.optimize import minimize
 plt.rcParams.update({'font.size': 14})
 
 ###########################################################################################################################
@@ -21,11 +22,11 @@ k_T = cmax * 10**-2
 k_H = cmax * 10**2
 partialPH2 = 1
 beta = 0.5
-GHad = -0.1 * F
+GHad = -0.10 * F
 
 # potential sweep & time 
-UpperV = 0.05
-LowerV = -0.3
+UpperV = 0.5
+LowerV = 0
 scanrate = 0.025  #scan rate in V/s
 timescan = (UpperV-LowerV)/(scanrate)
 max_time = 60
@@ -54,6 +55,7 @@ while True:
 
 # Convert to integer for logic checks
 mechanism_choice = int(mechanism_choice)
+
 
 #Linear sweep voltammetry- defining a potential as a function of time
 def potential(x):
@@ -126,7 +128,45 @@ tcurr1= np.empty(len(t), dtype=object)
 # Heyrovsky (r1) is negative in theta_H_rate because as the H reaction moves forward, the number of H-occupied sites decreases
 # Volmer (r0) is positive in theta_H_rate because as the V reaction moves forward, the number of H-occupied sites increases
 
+# Target Delta G range (Modify based on your needs)
+target_dG_min = -0.2 * F
+target_dG_max = -0.1 * F
 
+def objective(params):
+    global k_H, k_V  # Update global parameters
+    k_H, k_V = params  # Assign new values
+    
+    # Solve ODE with new k_H and k_V
+    soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='BDF')
+    
+    if not soln.success:
+        return np.inf  # Penalize failed solutions
+
+    thetaA_Star = soln.y[0, :]
+    thetaA_H = soln.y[1, :]
+
+    # Compute GHad values from the output
+    computed_dG = RT * np.log(thetaA_Star / thetaA_H)
+
+    # Compute error relative to target range
+    error = np.mean((computed_dG - target_dG_min) ** 2) + np.mean((computed_dG - target_dG_max) ** 2)
+    
+    return error
+
+# Initial guesses for k_H and k_V
+initial_guess = [cmax * 10**2, cmax * 10**1]  
+
+# Set bounds for parameters to keep them physically reasonable
+bounds = [(cmax * 10**-3, cmax * 10**3), (cmax * 10**-3, cmax * 10**3)]  
+
+# Perform optimization
+result = minimize(objective, initial_guess, bounds=bounds, method='Powell')
+
+if result.success:
+    print(f"Optimized k_H: {result.x[0]}")
+    print(f"Optimized k_V: {result.x[1]}")
+else:
+    print("Optimization failed:", result.message)
 
 
 
