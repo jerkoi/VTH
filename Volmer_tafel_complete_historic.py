@@ -16,23 +16,22 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-k_V = cmax * 10**-4
-k_T = cmax * 10**-6
+k_V = cmax * 10**-6
+k_T = cmax * 10**-8
 partialPH2 = 1
 beta = 0.5
 UpperV = 1
-LowerV = -1
+LowerV = 0
 scanrate = 0.025 #scan rate in V/s
 timestep = 0.01
-scanlength = 1
-timescan = scanlength/(scanrate)
-t = np.arange(0.0, 2*timescan, scanrate)
+timescan = 240 #seconds
+t = np.arange(0.0, timescan, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
 
-dGmin = -0.3
-dGmax = -0.3
-period = 1
+dGmin = 0.1
+dGmax = 0.1
+period = 1000 #SECONDS
 #Initial conditions
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
@@ -51,8 +50,7 @@ def potential(x):
             Vapp = LowerV + scanrate*(x%((UpperV-LowerV)/(scanrate)))
     else:
             Vapp = UpperV - scanrate*(x%((UpperV-LowerV)/(scanrate)))
-    
-    return Vapp
+    return -0.3
 
 def dGvt(t):
     '''varying deltaG between -0.2 and -0.15 every 10 seconds'''
@@ -88,7 +86,7 @@ def sitebal_r0(t, theta):
        r_V, r_T = rates_r0(t, theta)
        thetaStar_rate = ((-2*r_V) + r_T) / cmax
        thetaH_rate = ((2*r_V) - r_T) / cmax
-       dthetadt = [thetaStar_rate, thetaH_rate] # [0 = star, 1 = H]
+       dthetadt = [(thetaStar_rate), thetaH_rate] # [0 = star, 1 = H]
        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
@@ -101,7 +99,7 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
-soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t)
+soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method = 'BDF')
 
 
 ############################################################################################################################################################
@@ -118,12 +116,13 @@ thetaA_H = soln.y[1, :]
 r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
 ###takes only volmer rate to compute kinetic current density
 curr1 = r0_vals[:, 0] * -F
+maxcurrent = np.max(curr1) #finds max current density
 
 volmer_rate = r0_vals[:, 0]
-tafel_rate = r0_vals[:, 1]
+#tafel_rate = r0_vals[:, 1]
 
 '''assuming that tafel has an effect on the overall rate.  I wasn't sure about this.  If not, rate should just be volmer step'''
-t_rate = volmer_rate
+#t_rate = volmer_rate
 
 # # Find the indices of the maximum and minimum values for rate
 # max_curr_index = np.argmax(curr1)
@@ -146,7 +145,17 @@ t_rate = volmer_rate
 ########################################################## PLOTS ############################################################
 ###########################################################################################################################
 ###########################################################################################################################
-#Plot results
+# #Plot results
+# plt.figure(figsize=(8, 6))
+# plt.plot(t[1:200], thetaA_Star[1:200], label=r'$\theta_A^*$ (empty sites)', color='magenta')
+# plt.plot(t[1:200], thetaA_H[1:200], label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
+# plt.xlabel('Time (s)')
+# plt.ylabel('Coverage')
+# plt.grid()
+# plt.legend()
+# plt.title('Surface Coverage vs. Time')
+# plt.show()
+
 plt.figure(figsize=(8, 6))
 plt.plot(t[1:], thetaA_Star[1:], label=r'$\theta_A^*$ (empty sites)', color='magenta')
 plt.plot(t[1:], thetaA_H[1:], label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
@@ -155,18 +164,6 @@ plt.ylabel('Coverage')
 plt.grid()
 plt.legend()
 plt.title('Surface Coverage vs. Time')
-plt.show()
-
-dGvt_vec = np.vectorize(dGvt)
-
-plt.figure(figsize=(8, 6))
-plt.plot(t[1:], dGvt_vec(t[1:]), label=r'$\Delta G$', color='green')
-plt.plot(t[1:], V[1:], label='Potential', color='orange')
-plt.plot(t[1:], curr1[1:], label='Current', color='blue')
-plt.legend()
-plt.xlabel('Time (s)')
-plt.title('Potential and Free Energy vs. Time')
-plt.xlabel('Time (s)')
 plt.show()
 
 # #Plot of reaction rate vs time
@@ -187,6 +184,40 @@ plt.show()
 # plt.grid()
 # plt.show()
 
+dGvt_vec = np.vectorize(dGvt)
+
+plt.figure(figsize=(8, 6))
+plt.plot(t[1:200], dGvt_vec(t[1:200]), label=r'$\Delta G$', color='green')
+#plt.plot(t[1:], V[1:], label='Potential', color='orange')
+plt.legend()
+plt.xlabel('Time (s)')
+plt.title('Potential and Free Energy vs. Time')
+plt.show()
+
+plt.figure(figsize=(8, 6))
+plt.plot(t[1:], curr1[1:], label='Current', color='blue')
+plt.xlabel('Time (s)')
+plt.ylabel('Current (mA/cm²)')
+plt.title('Current vs. Time')
+plt.grid()
+plt.show()
+
+fig, ax1 = plt.subplots()
+ax1.set_xlabel('Time (s)')
+ax1.set_ylabel('Current (mA/cm²)', color='blue')
+ax1.plot(t[1:200], curr1[1:200], label='Current', color='blue')
+ax1.tick_params(axis='y', labelcolor='blue')
+ax1.legend(loc= 'lower left')
+
+ax2 = ax1.twinx()
+
+color = 'tab:blue'
+ax2.set_ylabel
+ax2.plot(t[1:200], V[1:200], label='Potential', color='orange')
+ax2.tick_params(axis='y', labelcolor='orange')
+fig.tight_layout()
+ax2.legend(loc= 'lower right')
+plt.show()
 
 # #Create a dictionary to hold the data for excel file 
 # data = {
@@ -206,5 +237,3 @@ plt.show()
 # df.to_excel("reaction_data.xlsx", index=False)
 
 # print("Data exported successfully to reaction_data.xlsx")
-
-

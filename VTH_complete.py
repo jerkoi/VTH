@@ -21,7 +21,7 @@ k_T = cmax * 10**-2
 k_H = cmax * 10**2
 partialPH2 = 1
 beta = 0.5
-GHad = -0.10 * F
+GHad = -0.1 * F
 
 # potential sweep & time 
 UpperV = 0.05
