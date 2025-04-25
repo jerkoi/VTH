@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-# import pandas as pd
+import pandas as pd
 plt.rcParams.update({'font.size': 14})
 
 ###########################################################################################################################
@@ -16,22 +16,23 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-k_V = cmax * 10**-12
-k_T = cmax * 10**-14
+k_V = cmax * 10**1
+k_T = cmax * 10**-2
 partialPH2 = 1
 beta = 0.5
-UpperV = 1
-LowerV = 0
-scanrate = 0.025 #scan rate in V/s
-timestep = 0.01
-timescan = 240 #seconds
-t = np.arange(0.0, timescan, scanrate)
+GHad = -0.1 * F
+
+# # potential sweep & time 
+# UpperV = 0.05
+# LowerV = -0.3
+scanrate = 0.025  #scan rate in V/s
+# timescan = (UpperV-LowerV)/(scanrate)
+max_time = 240
+t = np.arange(0.0, max_time, scanrate)
 endtime = t[-1]
 duration = [0, endtime]
+time_index = [t]
 
-dGmin = -0.1 * F
-dGmax = -0.1 * F
-period = 1000 #SECONDS
 #Initial conditions
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
@@ -43,55 +44,56 @@ theta0 = np.array([thetaA_Star0, thetaA_H0])
 ############################################################################################################################
 ############################################################################################################################
 
-
 #Linear sweep voltammetry- defining a potential as a function of time
 def potential(x):
-    if x%(2*timescan)<timescan:
-            Vapp = LowerV + scanrate*(x%((UpperV-LowerV)/(scanrate)))
-    else:
-            Vapp = UpperV - scanrate*(x%((UpperV-LowerV)/(scanrate)))
-    return -0.1
-
-def dGvt(t):
-    '''varying deltaG between -0.2 and -0.15 every 10 seconds'''
-
-    return dGmin if (t // period) % 2 == 0 else dGmax
+    # if x%(2*timescan)<timescan:
+    #         return LowerV + scanrate*(x% timescan)
+    # else:   
+        #return UpperV - scanrate*((x - timescan) % timescan)
+    return -0.2
 
 
 #Function to calculate U and Keq from theta, dG
-def eqpot(theta, GHad):
+def eqpot(theta):
     theta = np.asarray(theta)
-    thetaA_Star, thetaA_H = theta # unpack surface coverage
-    U0 = (-GHad/F) + (RT*np.log(thetaA_Star/thetaA_H))/F 
+    thetaA_star, thetaA_H = theta # unpack surface coverage
+    ##Volmer
+    U_V = (-GHad/F) + (RT*np.log(thetaA_star/thetaA_H))/F 
     #U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
-    return U0
+    
+    return U_V
+    
 
 #reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
 def rates_r0(t, theta):
     theta = np.asarray(theta)
     thetaA_star, thetaA_H = theta #surface coverages again, acting as concentrations
     V = potential(t)  # Use t directly (scalar)
-    GHad = F * dGvt(t)  # Get the current dG value based on time
-    U0 = eqpot(theta, GHad) #call function to find U for given theta
-
-    ##Volmer Rate Equation
-    r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U0) / RT) - np.exp((1 - beta) * F * (V - U0) / RT))
+    U_V = eqpot(theta) #call function to find U for given theta
     
-    ##Tafel Rate equation
-    ##Tafel does not contribute to kinetic current, but does affect coverage of adsorbed hydrogen and free sites
+    ##Volmer Rate Equation
+    r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (np.exp(-(beta) * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT))
+    
     r_T = k_T * ((thetaA_H **2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2*GHad) / RT)))
+    
     return r_V, r_T
 
 def sitebal_r0(t, theta):
-       r_V, r_T = rates_r0(t, theta)
-       thetaStar_rate = ((-2*r_V) + r_T) / cmax
-       thetaH_rate = ((2*r_V) - r_T) / cmax
-       dthetadt = [(thetaStar_rate), thetaH_rate] # [0 = star, 1 = H]
-       return dthetadt
+        r_V, r_T = rates_r0(t, theta)
+        thetaStar_rate_VT = ((-2*r_V) + r_T) / cmax
+        thetaH_rate_VT = ((2*r_V) - r_T) / cmax
+        dthetadt = [(thetaStar_rate_VT), thetaH_rate_VT] # [0 = star, 1 = H]
+        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
 curr1 = np.empty(len(t), dtype=object)
 tcurr1= np.empty(len(t), dtype=object)
+
+# whether a rate is positive or negative depends on the associated reaction affects each site balance
+# Heyrovsky (r1) is positive in theta_star_rate because as the H reaction moves forward, the number of empty sites increases
+# Volmer (r0) is negative in theta_star_rate because as the V reaction moves forward, the number of empty sites decreases
+# Heyrovsky (r1) is negative in theta_H_rate because as the H reaction moves forward, the number of H-occupied sites decreases
+# Volmer (r0) is positive in theta_H_rate because as the V reaction moves forward, the number of H-occupied sites increases
 
 ############################################################################################################################################################
 ############################################################################################################################################################
@@ -99,8 +101,27 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
-soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method = 'BDF')
+# List of GHad values to try
+GHad_list = np.linspace(-2, 2, 61)
+GHad_results = []
 
+for GHad in GHad_list:
+    print(f"Simulating for GHad = {GHad:.3f}")
+    GHad_fixed = GHad  # update global for this simulation
+    
+    # Solve the system
+    soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='BDF')
+    
+    # Extract theta
+    thetaA_Star = soln.y[0, :]
+    thetaA_H = soln.y[1, :]
+
+    # Recalculate rates
+    r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
+    curr1 = r0_vals[:, 0] * -F * 1000  # current from Volmer step
+
+    max_current = (np.abs(curr1[100]))  # record absolute max current
+    GHad_results.append((GHad, max_current))  # save result
 
 ############################################################################################################################################################
 ############################################################################################################################################################
@@ -115,30 +136,14 @@ thetaA_H = soln.y[1, :]
 #calculates rate based on theta values calculated during odeint, zips it with time given from potential(x) function
 r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
 ###takes only volmer rate to compute kinetic current density
-curr1 = r0_vals[:, 0] * -F
-maxcurrent = np.max(curr1) #finds max current density
 
 volmer_rate = r0_vals[:, 0]
-#tafel_rate = r0_vals[:, 1]
+tafel_rate = r0_vals[:, 1]
 
 '''assuming that tafel has an effect on the overall rate.  I wasn't sure about this.  If not, rate should just be volmer step'''
-#t_rate = volmer_rate
+t_rate = volmer_rate + tafel_rate
 
-# # Find the indices of the maximum and minimum values for rate
-# max_curr_index = np.argmax(curr1)
-# min_curr_index = np.argmin(curr1)
-
-# # Find the corresponding times
-# time_max_curr = t[max_curr_index]
-# time_min_curr = t[min_curr_index]
-
-# # Calculate the voltages at these times
-# voltage_max_curr = potential(time_max_curr)
-# voltage_min_curr = potential(time_min_curr)
-
-# # Print the results
-# print(f"Voltage at max current: {voltage_max_curr}")
-# print(f"Voltage at min current: {voltage_min_curr}")
+curr1 = t_rate * -F * 1000 #finds max current density
 
 ###########################################################################################################################
 ###########################################################################################################################
@@ -147,93 +152,35 @@ volmer_rate = r0_vals[:, 0]
 ###########################################################################################################################
 # #Plot results
 # plt.figure(figsize=(8, 6))
-# plt.plot(t[1:200], thetaA_Star[1:200], label=r'$\theta_A^*$ (empty sites)', color='magenta')
-# plt.plot(t[1:200], thetaA_H[1:200], label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
-# plt.xlabel('Time (s)')
+# plt.plot(t[1:], thetaA_Star[1:], label=r'$\theta_A^*$ (empty sites)', color='magenta')
+# plt.plot(t[1:], thetaA_H[1:], label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
+# plt.xlabel('Voltage vs. RHE (V)')
 # plt.ylabel('Coverage')
 # plt.grid()
 # plt.legend()
 # plt.title('Surface Coverage vs. Time')
 # plt.show()
 
-plt.figure(figsize=(8, 6))
-plt.plot(t[1:], thetaA_Star[1:], label=r'$\theta_A^*$ (empty sites)', color='magenta')
-plt.plot(t[1:], thetaA_H[1:], label=r'$\theta_A^H$ (adsorbed hydrogen)', color='blue')
-plt.xlabel('Time (s)')
-plt.ylabel('Coverage')
-plt.grid()
-plt.legend()
-plt.title('Surface Coverage vs. Time')
-plt.show()
-
-# #Plot of reaction rate vs time
-# plt.figure(figsize=(8, 6))
-# plt.plot(t[1:], t_rate[1:], label='Total Rate', color='red')
-# plt.xlabel('Time (s)')
-# plt.ylabel(r'$r_0$ (mol/cm²/s)')
-# plt.legend()
-# plt.title('Reaction Rate vs. Time')
-# plt.grid()
-# plt.show()
-
-# # plot kinetic current desnity as a function of potential
-# plt.plot(V[10:20000], curr1[10:20000], 'b')
-# plt.xlabel('V vs RHE(V)')
-# plt.ylabel('Kinetic current (mA/cm2)')
-# plt.title('Kinetic Current vs Potential')
-# plt.grid()
-# plt.show()
-
-dGvt_vec = np.vectorize(dGvt)
-
-plt.figure(figsize=(8, 6))
-plt.plot(t[1:200], dGvt_vec(t[1:200]), label=r'$\Delta G$', color='green')
-#plt.plot(t[1:], V[1:], label='Potential', color='orange')
-plt.legend()
-plt.xlabel('Time (s)')
-plt.title('Potential and Free Energy vs. Time')
-plt.show()
-
-plt.figure(figsize=(8, 6))
-plt.plot(t[1:], curr1[1:], label='Current', color='blue')
-plt.xlabel('Time (s)')
-plt.ylabel('Current (mA/cm²)')
-plt.title('Current vs. Time')
+# plot kinetic current desnity as a function of potential
+plt.plot(t[10:20000], curr1[10:20000], 'b')
+plt.xlabel('V vs RHE(V)')
+plt.ylabel('Kinetic current (mA/cm2)')
+plt.title('Kinetic Current vs Voltage')
 plt.grid()
 plt.show()
 
-fig, ax1 = plt.subplots()
-ax1.set_xlabel('Time (s)')
-ax1.set_ylabel('Current (mA/cm²)', color='blue')
-ax1.plot(t[1:200], curr1[1:200], label='Current', color='blue')
-ax1.tick_params(axis='y', labelcolor='blue')
-ax1.legend(loc= 'lower left')
+# Unpack results
+GHad_vals, abs_currents = zip(*GHad_results)
 
-ax2 = ax1.twinx()
-
-color = 'tab:blue'
-ax2.set_ylabel
-ax2.plot(t[1:200], V[1:200], label='Potential', color='orange')
-ax2.tick_params(axis='y', labelcolor='orange')
-fig.tight_layout()
-ax2.legend(loc= 'lower right')
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(GHad_vals, abs_currents, marker='o')
+plt.xlabel("GHad (eV)")
+plt.ylabel("Max |Current Density| (mA/cm²)")
+plt.title("Max Current Density vs GHad")
+plt.grid(True)
+plt.tight_layout()
 plt.show()
 
-# #Create a dictionary to hold the data for excel file 
-# data = {
-#     "Time (s)": t,
-#     "Voltage (V)": V[:len(t)],  
-#     "Volmer Rate": r0_vals[:len(t), 0],
-#     "Tafel Rate": r0_vals[:len(t), 1],
-#     "ThetaA_Star": thetaA_Star[:len(t)],
-#     "ThetaA_H": thetaA_H[:len(t)],
-#     "Current": curr1[:len(t)]
-# }
-
-# # Convert the dictionary to a DataFrame
-# df = pd.DataFrame(data)
-
-# # Export the DataFrame to an Excel file
-# df.to_excel("reaction_data.xlsx", index=False)
-
-# print("Data exported successfully to reaction_data.xlsx")
+df = pd.DataFrame(GHad_results, columns=["GHad (eV)", "Max |Current| (mA/cm²)"])
+print(df.to_string(index=False))

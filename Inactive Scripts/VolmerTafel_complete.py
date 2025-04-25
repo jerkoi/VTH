@@ -18,12 +18,18 @@ cmax = 7.5*10e-10 #mol*cm-2*s-1
 # Model Parameters
 k_V = cmax * 10**-4
 k_T = cmax * 10**-6
+k_V = cmax * 10**-4
+k_T = cmax * 10**-6
 partialPH2 = 1
 beta = 0.5
 UpperV = 1
 LowerV = -1
+UpperV = 1
+LowerV = -1
 scanrate = 0.025 #scan rate in V/s
 timestep = 0.01
+scanlength = 1
+timescan = scanlength/(scanrate)
 scanlength = 1
 timescan = scanlength/(scanrate)
 t = np.arange(0.0, 2*timescan, scanrate)
@@ -51,6 +57,7 @@ def potential(x):
             Vapp = LowerV + scanrate*(x%((UpperV-LowerV)/(scanrate)))
     else:
             Vapp = UpperV - scanrate*(x%((UpperV-LowerV)/(scanrate)))
+    
     
     return Vapp
 
@@ -89,6 +96,7 @@ def sitebal_r0(t, theta):
        thetaStar_rate = ((-2*r_V) + r_T) / cmax
        thetaH_rate = ((2*r_V) - r_T) / cmax
        dthetadt = [thetaStar_rate, thetaH_rate] # [0 = star, 1 = H]
+       dthetadt = [thetaStar_rate, thetaH_rate] # [0 = star, 1 = H]
        return dthetadt
 
 V = np.array([potential(ti) for ti in t])
@@ -101,6 +109,7 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
+soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t)
 soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t)
 
 
@@ -168,6 +177,17 @@ plt.xlabel('Time (s)')
 plt.title('Potential and Free Energy vs. Time')
 plt.xlabel('Time (s)')
 plt.show()
+dGvt_vec = np.vectorize(dGvt)
+
+plt.figure(figsize=(8, 6))
+plt.plot(t[1:], dGvt_vec(t[1:]), label=r'$\Delta G$', color='green')
+plt.plot(t[1:], V[1:], label='Potential', color='orange')
+plt.plot(t[1:], curr1[1:], label='Current', color='blue')
+plt.legend()
+plt.xlabel('Time (s)')
+plt.title('Potential and Free Energy vs. Time')
+plt.xlabel('Time (s)')
+plt.show()
 
 # #Plot of reaction rate vs time
 # plt.figure(figsize=(8, 6))
@@ -179,6 +199,13 @@ plt.show()
 # plt.grid()
 # plt.show()
 
+# # plot kinetic current desnity as a function of potential
+# plt.plot(V[10:20000], curr1[10:20000], 'b')
+# plt.xlabel('V vs RHE(V)')
+# plt.ylabel('Kinetic current (mA/cm2)')
+# plt.title('Kinetic Current vs Potential')
+# plt.grid()
+# plt.show()
 # # plot kinetic current desnity as a function of potential
 # plt.plot(V[10:20000], curr1[10:20000], 'b')
 # plt.xlabel('V vs RHE(V)')
