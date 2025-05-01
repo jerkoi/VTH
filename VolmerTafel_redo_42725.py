@@ -17,11 +17,13 @@ cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
 Ava = 6.022*10**23
+eV_to_J = 1.60218e-19  # Conversion factor from eV to J
 k_V = cmax * 10**1
 k_T = cmax * 10**-2
 partialPH2 = 1
 beta = 0.5
-GHad = -0.1 * Ava
+GHad = -0.2 * Ava * eV_to_J  # Convert GHad from eV to J
+
 
 # # potential sweep & time 
 # UpperV = 0.05
@@ -102,33 +104,35 @@ tcurr1= np.empty(len(t), dtype=object)
 ############################################################################################################################################################
 ############################################################################################################################################################
 
-# List of GHad values to try
-GHad_list = np.linspace(-2, 2, 61)
-GHad_results = []
+# # List of GHad values to try
+# GHad_list = np.linspace(-2, 2, 61)
+# GHad_results = []
 
-for GHad in GHad_list:
-    print(f"Simulating for GHad = {GHad:.3f}")
-    GHad_fixed = GHad  # update global for this simulation
+# for GHad in GHad_list:
+#     print(f"Simulating for GHad = {GHad:.3f}")
+#     GHad_fixed = GHad  # update global for this simulation
     
-    # Solve the system
-    soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='BDF')
+#     # Solve the system
+#     soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='BDF')
     
-    # Extract theta
-    thetaA_Star = soln.y[0, :]
-    thetaA_H = soln.y[1, :]
+#     # Extract theta
+#     thetaA_Star = soln.y[0, :]
+#     thetaA_H = soln.y[1, :]
 
-    # Recalculate rates
-    r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
-    curr1 = r0_vals[:, 0] * -F * 1000  # current from Volmer step
+#     # Recalculate rates
+#     r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
+#     curr1 = r0_vals[:, 0] * -F * 1000  # current from Volmer step
 
-    max_current = (np.abs(curr1[100]))  # record absolute max current
-    GHad_results.append((GHad, max_current))  # save result
+#     max_current = (np.abs(curr1[100]))  # record absolute max current
+#     GHad_results.append((GHad, max_current))  # save result
 
 ############################################################################################################################################################
 ############################################################################################################################################################
 ########################################################## Value Extracting ################################################################################
 ############################################################################################################################################################
 ############################################################################################################################################################
+
+soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='BDF')
 
 # Extract coverages from odeint
 thetaA_Star = soln.y[0, :]
@@ -144,7 +148,7 @@ tafel_rate = r0_vals[:, 1]
 '''assuming that tafel has an effect on the overall rate.  I wasn't sure about this.  If not, rate should just be volmer step'''
 t_rate = volmer_rate + tafel_rate
 
-curr1 = t_rate * -F * 1000 #finds max current density
+curr1 = volmer_rate * -F * 1000 #finds max current density
 
 ###########################################################################################################################
 ###########################################################################################################################
@@ -170,18 +174,18 @@ plt.title('Kinetic Current vs Voltage')
 plt.grid()
 plt.show()
 
-# Unpack results
-GHad_vals, abs_currents = zip(*GHad_results)
+## Unpack results
+#GHad_vals, abs_currents = zip(*GHad_results)
 
-# Plotting
-plt.figure(figsize=(10, 6))
-plt.plot(GHad_vals, abs_currents, marker='o')
-plt.xlabel("GHad (eV)")
-plt.ylabel("Max |Current Density| (mA/cm²)")
-plt.title("Max Current Density vs GHad")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+# # Plotting
+# plt.figure(figsize=(10, 6))
+# plt.plot(GHad_vals, abs_currents, marker='o')
+# plt.xlabel("GHad (eV)")
+# plt.ylabel("Max |Current Density| (mA/cm²)")
+# plt.title("Max Current Density vs GHad")
+# plt.grid(True)
+# plt.tight_layout()
+# plt.show()
 
-df = pd.DataFrame(GHad_results, columns=["GHad (eV)", "Max |Current| (mA/cm²)"])
-print(df.to_string(index=False))
+# df = pd.DataFrame(GHad_results, columns=["GHad (eV)", "Max |Current| (mA/cm²)"])
+# print(df.to_string(index=False))

@@ -127,8 +127,8 @@ for GHad in GHad_list:
     curr1 = r0_vals[:, 0] * -F * 1000  # current from Volmer step
 
     max_current = (np.abs(curr1[100]))  # record absolute max current
-    thetaStar_vdG = (np.abs(thetaA_Star[100]))
-    thetaH_vdG = (np.abs(thetaA_H[100]))
+    thetaStar_vdG = (np.abs(thetaA_Star))
+    thetaH_vdG = (np.abs(thetaA_H))
     thetaAstar_dgVt_list.append(thetaStar_vdG)
     thetaA_H_dgVt_list.append(thetaH_vdG)
     GHad_results.append((GHad, max_current))  # save result
@@ -173,8 +173,7 @@ curr1 = t_rate * -F * 1000 #finds max current density
 
 # plt.plot(t[100:], rT_list[100:len(t)], label='Tafel Rate', color='magenta')
 # plt.plot(t[100:], rV_list[100:len(t)], label='Volmer Rate', color='blue')
-plt.plot(GHad_list, thetaAstar_dgVt_list[100], label='Theta Star', color='red')
-plt.plot(GHad_list, thetaA_H_dgVt_list[100], label='Theta H', color='orange')
+plt.plot(GHad_list, thetaA_H_dgVt_list, label='Theta H', color='orange')
 # plt.plot(t, soln1[:, 0], label='Theta Star', color='magenta')
 # plt.plot(t, curr1[:len(t)], label='Current Density', color='green')
 # plt.plot(t, thetaA_Star[:len(t)], label='Theta Star', color='red')
@@ -182,7 +181,6 @@ plt.plot(GHad_list, thetaA_H_dgVt_list[100], label='Theta H', color='orange')
 plt.xlabel('dG')
 plt.ylabel('Coverage')
 plt.grid()
-plt.legend()
 # plt.title('Surface Coverage vs. Time')
 plt.show()
 
@@ -203,7 +201,7 @@ plt.plot(GHad_vals, abs_currents, marker='o')
 plt.xlabel("GHad (eV)")
 plt.ylabel("Max |Current Density| (mA/cm²)")
 plt.title("Max Current Density vs GHad")
-plt.grid(True)
+plt.grid()
 plt.tight_layout()
 plt.show()
 
