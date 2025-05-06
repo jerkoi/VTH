@@ -16,8 +16,8 @@ F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-k_V = cmax * 10**-6
-k_T = cmax * 10**-8
+k_V = cmax * 10**2
+k_T = cmax * 10**4
 partialPH2 = 1
 beta = 0.5
 UpperV = 1

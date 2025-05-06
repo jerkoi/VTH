@@ -17,12 +17,12 @@ cmax = 7.5*10e-10 #mol*cm-2
 
 # Model Parameters
 k_V = cmax * 10**2
-k_T = cmax * 10**2
+k_T = cmax * 10**4
 conversion_factor = 1.60218e-19  # Conversion factor from eV to J
 AvoNum = 6.02*10**23
 partialPH2 = 1
 beta = 0.5
-GHad = 0.3 * AvoNum * conversion_factor #J/mol
+GHad = 0.056 * AvoNum * conversion_factor #J/mol
 
 # # potential sweep & time 
 UpperV = 0.5
@@ -179,18 +179,21 @@ tafel_rate = r0_vals[:, 1]
 # Unpack results
 GHad_vals, abs_currents= zip(*GHad_results)
 
-# # Plotting
-# plt.figure(figsize=(10, 6))
-# plt.plot(GHad_vals, abs_currents, marker='o')
-# plt.xlabel("GHad (eV)")
-# plt.ylabel("Max |Current Density| (mA/cm²)")
-# plt.title("Max Current Density vs GHad")
-# plt.grid(True)
-# plt.tight_layout()
-# plt.show()
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(GHad_vals, abs_currents, marker='o')
+plt.xlabel("GHad (eV)")
+plt.ylabel("Max |Current Density| (mA/cm²)")
+plt.title("Max Current Density vs GHad")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
 
 # df = pd.DataFrame(GHad_results, columns=["GHad (eV)", "Max |Current| (mA/cm²)", "ThetaH Coverage", "ThetaStar Coverage"])
 # print(df.to_string(index=False))
 
 print(f"Max Current: {abs_currents[0]:.3f} mA/cm² at GHad = {GHad_vals[0]/(AvoNum * conversion_factor):.3f} eV")
 
+print("\nSummary of GHad vs Max Current:")
+for g, c in GHad_results:
+    print(f"GHad = {g:.3f} eV → Max |Current| = {c:.3f} mA/cm²")
