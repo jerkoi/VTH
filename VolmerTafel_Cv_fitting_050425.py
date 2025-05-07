@@ -151,7 +151,7 @@ curr1 = volmer_rate * -F * 1000 #finds max current density
 #extracting data from SRO pristine excel file
 df = pd.read_excel("Pristine_experimentaldata.xlsx", sheet_name= 0)
 
-experi_I = df.iloc[:, 27] * 100000
+experi_I = (df.iloc[:, 27] * 100000) + 0.5
 experi_V = df.iloc[:, 24]
 experi_absI = np.abs(experi_I)
 

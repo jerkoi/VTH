@@ -23,7 +23,7 @@ thetaA_Star0 = 1.0 - thetaA_H0
 theta0 = np.array([thetaA_Star0, thetaA_H0])
 
 # GHad sweep values
-GHad_eV_list = np.linspace(-0.3, 0.3, 28)
+GHad_eV_list = np.linspace(-0.3, 0.3, 25)
 GHad_J_list = GHad_eV_list * AvoNum * conversion_factor
 
 # Store results
