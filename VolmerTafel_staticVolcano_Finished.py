@@ -9,9 +9,9 @@ cmax = 7.5e-9     # mol/cm²
 conversion_factor = 1.60218e-19  # eV to J
 AvoNum = 6.02e23  # 1/mol
 partialPH2 = 1.0
-beta = 0.5
-k_V = cmax * 1e2
-k_T = cmax * 1e4
+beta = 0.28
+k_V = cmax * 10**3.8
+k_T = cmax * 10**6
 scanrate = 0.025
 max_time = 240
 t = np.arange(0.0, max_time, scanrate)
@@ -23,7 +23,7 @@ thetaA_Star0 = 1.0 - thetaA_H0
 theta0 = np.array([thetaA_Star0, thetaA_H0])
 
 # GHad sweep values
-GHad_eV_list = np.linspace(-0.3, 0.3, 25)
+GHad_eV_list = np.linspace(-0.2, 0.2, 25)
 GHad_J_list = GHad_eV_list * AvoNum * conversion_factor
 
 # Store results
@@ -82,7 +82,7 @@ plt.figure(figsize=(10, 6))
 plt.plot(GHad_vals, abs_currents, marker='o')
 plt.xlabel("GHad (eV)")
 plt.ylabel("Max |Current Density| (mA/cm²)")
-plt.title("Max Current Density vs GHad")
+plt.title(f"Max Current Density vs GHad, $k_V$ ={k_V / cmax}  and $beta$ = {beta}, $V$ = {potential(t)}")
 plt.grid(True)
 plt.tight_layout()
 plt.show()

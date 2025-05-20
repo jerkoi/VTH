@@ -172,7 +172,7 @@ tafel_rate = r0_vals[:, 1]
 # plt.plot(V[10:20000], curr1[10:20000], 'b')
 # plt.xlabel('Voltage vs. SHE (V)')
 # plt.ylabel('Kinetic current (mA/cm2)')
-# plt.title(r'Kinetic Current vs Time, GHad = %.2f eV, k_V = %.2e, k_T = %.2e' % (GHad / (AvoNum * conversion_factor), (k_V / cmax), (k_T / cmax)))
+plt.title(r'Kinetic Current vs Time, GHad = %.2f eV, k_V = %.2e, k_T = %.2e' % (GHad / (AvoNum * conversion_factor), (k_V / cmax), (k_T / cmax)))
 # plt.grid()
 # plt.show()
 

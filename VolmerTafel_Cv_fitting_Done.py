@@ -2,6 +2,8 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.interpolate import interp1d
+import numpy as np
 plt.rcParams.update({'font.size': 14})
 
 ###########################################################################################################################
@@ -18,10 +20,10 @@ cmax = 7.5*10e-10 #mol*cm-2*s-1
 # Model Parameters
 Avo = 6.022*10**23
 eV_to_J = 1.60218e-19  # Conversion factor from eV to J
-k_V = cmax * 10**4
-k_T = cmax * 10**4
+k_V = cmax * 10**3.8
+k_T = cmax * 10**6
 partialPH2 = 1
-beta = 0.5
+beta = 0.28
 GHad = -0.3 * Avo * eV_to_J  # Convert GHad from eV to J
 
 # # potential sweep & time 
@@ -98,34 +100,6 @@ tcurr1= np.empty(len(t), dtype=object)
 
 ############################################################################################################################################################
 ############################################################################################################################################################
-########################################################## SOLVER ##########################################################################################
-############################################################################################################################################################
-############################################################################################################################################################
-
-# # List of GHad values to try
-# GHad_list = np.linspace(-2, 2, 61)
-# GHad_results = []
-
-# for GHad in GHad_list:
-#     print(f"Simulating for GHad = {GHad:.3f}")
-#     GHad_fixed = GHad  # update global for this simulation
-    
-#     # Solve the system
-#     soln = solve_ivp(sitebal_r0, duration, theta0, t_eval=t, method='BDF')
-    
-#     # Extract theta
-#     thetaA_Star = soln.y[0, :]
-#     thetaA_H = soln.y[1, :]
-
-#     # Recalculate rates
-#     r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
-#     curr1 = r0_vals[:, 0] * -F * 1000  # current from Volmer step
-
-#     max_current = (np.abs(curr1[100]))  # record absolute max current
-#     GHad_results.append((GHad, max_current))  # save result
-
-############################################################################################################################################################
-############################################################################################################################################################
 ########################################################## Value Extracting ################################################################################
 ############################################################################################################################################################
 ############################################################################################################################################################
@@ -154,6 +128,12 @@ df = pd.read_excel("Pristine_experimentaldata.xlsx", sheet_name= 0)
 experi_I = (df.iloc[:, 27] * 100000) + 0.4
 experi_V = df.iloc[:, 24]
 experi_absI = np.abs(experi_I)
+
+##########################################################################################################################
+###########################################################################################################################
+#################################################### ST Dev Calc #########################################################
+###########################################################################################################################
+############################################################################################################################
 
 
 ###########################################################################################################################
@@ -189,7 +169,6 @@ experi_absI = np.abs(experi_I)
 fig, axs = plt.subplots(figsize=(8, 10))
 axs.plot(V[10:20000], curr1[10:20000], 'b', label='Model Data')
 axs.plot(experi_V, experi_I, 'g', label='Experimental Data')
-axs.set_ylim(-50)
 axs.set_xlim(None, 0.2)
 axs.set_xlabel('Voltage vs. RHE (V)')
 axs.set_ylabel('Kinetic current (mA/cm2)')
@@ -218,7 +197,7 @@ ax.plot(np.log(experi_absI), experi_V, 'r', label='Experimental Data')
 ax.plot(np.log(np.abs(curr1[10:20000])), V[10:20000], 'b', label='Model Data')
 ax.set_xlabel('Log Kinetic current (mA/cm2)')
 ax.set_ylabel('Voltage vs. RHE (V)')
-ax.set_title(r'Log Kinetic Current vs Voltage, $r_V$ = %.2e' % (k_V / cmax))
+ax.set_title(r'Log Kinetic Current vs Voltage, $k_V$ = %.2e, $beta$ = %.2f' % (k_V / cmax, beta))
 ax.grid()
 ax.legend()
 plt.show()
