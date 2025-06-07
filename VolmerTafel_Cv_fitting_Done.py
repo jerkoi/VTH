@@ -27,7 +27,7 @@ beta = 0.28
 GHad = -0.3 * Avo * eV_to_J  # Convert GHad from eV to J
 
 # # potential sweep & time 
-UpperV = 0.05
+UpperV = 0
 LowerV = -0.5
 scanrate = 0.025  #scan rate in V/s
 timescan = (UpperV-LowerV)/(scanrate)

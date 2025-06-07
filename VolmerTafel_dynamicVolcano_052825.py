@@ -98,7 +98,7 @@ if do_dynamic_ghad:
     r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, theta_at_t.T)])
     r_V_vals = r0_vals[:, 0]
     r_T_vals = r0_vals[:, 1]
-    curr_dynamic = r_V_vals * -F *1000 # mA/cm²
+    curr_dynamic = r_V_vals * -F * 1000 # mA/cm²
     GHad_t_J = np.array([dGvt(time) for time in t])
     GHad_t_eV = GHad_t_J / (Avo * conversion_factor)
 

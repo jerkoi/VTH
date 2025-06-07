@@ -23,8 +23,10 @@ thetaA_Star0 = 1.0 - thetaA_H0
 theta0 = np.array([thetaA_Star0, thetaA_H0])
 
 # GHad sweep values
-GHad_eV_list = np.linspace(-0.2, 0.2, 25)
+GHad_eV_list = np.linspace(-0.3, 0.3, 25)
 GHad_J_list = GHad_eV_list * AvoNum * conversion_factor
+
+thetaH_list = []
 
 # Store results
 GHad_results = []
@@ -36,7 +38,7 @@ for GHad, GHad_eV in zip(GHad_J_list, GHad_eV_list):
     # Redefine everything for this GHad value
 
     def potential(x):
-        return -0.1
+        return -0.3
 
     def eqpot(theta):
         theta_star, theta_H = theta
@@ -68,6 +70,8 @@ for GHad, GHad_eV in zip(GHad_J_list, GHad_eV_list):
     theta_star = soln.y[0, :]
     theta_H = soln.y[1, :]
 
+    thetaH_list.append(theta_H)
+
     # Calculate current from Volmer step
     r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
     curr1 = r0_vals[:, 0] * -F * 1000  # mA/cm²
@@ -86,6 +90,28 @@ plt.title(f"Max Current Density vs GHad, $k_V$ ={k_V / cmax}  and $beta$ = {beta
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
+# Convert thetaH_list to a NumPy array for easy slicing
+thetaH_array_long = np.array(thetaH_list)
+thetaH_array = thetaH_array_long[:, 1:]  # Shape: (25, 9600)
+
+# Plot settings
+plt.figure(figsize=(12, 6))
+cmap = plt.get_cmap('viridis', len(GHad_eV_list))  # Create a colormap with 25 colors
+
+# Plot each theta_H vs time for each GHad
+for i, GHad_val in enumerate(GHad_eV_list):
+    plt.plot(t[1:], thetaH_array[i], label=f'{GHad_val:.2f} eV', color=cmap(i))
+
+# Labeling
+plt.xlabel('Time (s)')
+plt.ylabel(r'$\theta_H$ Coverage')
+plt.title(r'$\theta_H$ vs Time for Different $G_{\mathrm{Had}}$ Values')
+plt.legend(title='GHad (eV)', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
 
 # Print best result
 max_index = np.argmax(abs_currents)

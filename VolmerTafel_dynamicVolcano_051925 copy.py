@@ -131,8 +131,13 @@ if do_dynamic_ghad:
     print("Length of theta H array: ", len(thetaH_array))
 
     plt.subplot(3, 1, 3)
-    plt.plot(t, thetaH_array[:len(t)], label='Theta H')
+    plt.ylabel("Coverage (Theta H)")
+    plt.xlabel("Time (s)")
+    plt.title("Dynamic GHad(t): Coverage vs Time")
+    plt.plot(t, thetaH_array, label='Theta H', color = "g")
     plt.show()
+
+    prin
 
     # Mask-based max current extraction
     mask_min = np.isclose(GHad_t_eV, dGmin_eV)

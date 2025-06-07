@@ -7,12 +7,12 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
 # Physical Constants
-RT = 8.314*298 #ideal gas law times temperature, J/mol
+RT = 8.314*298 #ideal gas law times temperature
 F = 96485.0 #Faraday constant, C/mol
 cmax = 7.5*10e-10 #mol*cm-2*s-1
 
 # Model Parameters
-Avo = 6.022*10**23 #atoms/mol
+Avo = 6.022*10**23
 conversion_factor = 1.60218e-19  # Conversion factor from eV to J
 k_V = cmax * 10**3.8
 k_T = k_V * 100
@@ -37,9 +37,13 @@ duration = [0, max_time]
 time_index = [t]
 
 #Initial conditions
-thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
+thetaA_H0 = 0.01  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
-theta0 = np.array([thetaA_Star0, thetaA_H0])
+theta0_H = 1 / (1 + np.exp((dGmin_eV * Avo * conversion_factor) / RT))
+theta0 = [theta0_H, 1 - theta0_H]
+
+print("Initial thetaA_H0:", theta0)
+
 
 # === Prompt User ===
 print("Choose which simulations to run:")
@@ -52,7 +56,7 @@ dynamic_overlay_points = []
 # === DYNAMIC GHad(t) SIMULATION ===
 if do_dynamic_ghad:
     print("\nRunning dynamic GHad(t) simulation...")
-
+    thetaH_array = []
     # Time-varying GHad values (in J)
     dGmin = dGmin_eV * Avo * conversion_factor
     dGmax = dGmax_eV * Avo * conversion_factor
@@ -85,6 +89,7 @@ if do_dynamic_ghad:
         
         r_T = k_T * ((thetaA_H **2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2*GHad) / RT)))
         
+
         return r_V, r_T
 
     def sitebal(t, theta):
@@ -98,28 +103,41 @@ if do_dynamic_ghad:
     r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, theta_at_t.T)])
     r_V_vals = r0_vals[:, 0]
     r_T_vals = r0_vals[:, 1]
-    curr_dynamic = r_V_vals * -F *1000 # mA/cm²
+    curr_dynamic = r_V_vals * -F * 1000  # mA/cm²
     GHad_t_J = np.array([dGvt(time) for time in t])
     GHad_t_eV = GHad_t_J / (Avo * conversion_factor)
+
+    thetaH_array = theta_at_t[1, :]  # thetaA_H values
+    print("Length of soln.t:", len(soln.t))
 
     print("len(t):", len(t))
     print("len(curr_dynamic):", len(curr_dynamic))
 
     # Plot
     plt.figure(figsize=(12, 6))
-    plt.subplot(2, 1, 1)
+    plt.subplot(3, 1, 1)
     plt.plot(t, curr_dynamic, label='Volmer Current')
     plt.ylabel("Current Density (mA/cm²)")
     plt.title("Dynamic GHad(t): Current vs Time, $k_V$ = {:.2e}, $k_T$ = {:.2e}, $beta$ = {:.2f}".format(k_V / cmax, k_T / cmax, beta))
     plt.legend()
 
-    plt.subplot(2, 1, 2)
+    plt.subplot(3, 1, 2)
     plt.plot(t, GHad_t_eV)
     plt.ylabel("GHad (eV)")
     plt.xlabel("Time (s)")
     plt.title("Dynamic GHad(t): GHad vs Time")
     plt.tight_layout()
+
+    print("Length of theta H array: ", len(thetaH_array))
+
+    plt.subplot(3, 1, 3)
+    plt.ylabel("Coverage (Theta H)")
+    plt.xlabel("Time (s)")
+    plt.title("Dynamic GHad(t): Coverage vs Time")
+    plt.plot(t, thetaH_array, label='Theta H', color = "g")
     plt.show()
+
+    print(thetaH_array)
 
     # Mask-based max current extraction
     mask_min = np.isclose(GHad_t_eV, dGmin_eV)
