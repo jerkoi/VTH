@@ -105,16 +105,16 @@ def rates_r0(t, theta):
     return r_V, r_T, r_H
 
 def sitebal_r0(t, theta):
-       r_V, r_T, r_H = rates_r0(t, theta)
-       if mechanism_choice == 0:
-            thetaStar_rate_VT = ((-2*r_V) + r_T) / cmax
-            thetaH_rate_VT = ((2*r_V) - r_T) / cmax
-            dthetadt = [(thetaStar_rate_VT), thetaH_rate_VT] # [0 = star, 1 = H]
-       if mechanism_choice == 1:
-            theta_star_rate = r_H-r_V      # summing all step rates based on how they affect theta_star
-            theta_H_rate = r_V-r_H        # summing all step rates based on how they affect theta_H
-            dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
-       return dthetadt
+    r_V, r_T, r_H = rates_r0(t, theta)
+    if mechanism_choice == 0:
+        thetaStar_rate_VT = ((-2*r_V) + r_T) / cmax
+        thetaH_rate_VT = ((2*r_V) - r_T) / cmax
+        dthetadt = [(thetaStar_rate_VT), thetaH_rate_VT] # [0 = star, 1 = H]
+    if mechanism_choice == 1:
+        theta_star_rate = r_H-r_V      # summing all step rates based on how they affect theta_star
+        theta_H_rate = r_V-r_H        # summing all step rates based on how they affect theta_H
+        dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
+    return dthetadt
 
 V = np.array([potential(ti) for ti in t])
 curr1 = np.empty(len(t), dtype=object)

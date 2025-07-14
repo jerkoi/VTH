@@ -1,21 +1,35 @@
 #Importing libraries- numpy, odeint, error function, matplotlib
 import numpy as np
-from scipy.integrate import odeint
+from scipy.integrate import solve_ivp
 from scipy.special import erf
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 14})
 
+# Initial conditions should have exactly 4 elements in this order:
+thetaA_Star0 = ...  # empty sites
+thetaA_H0 = ...     # H coverage
+thetaA_OH0 = ...    # OH coverage
+thetaA_O0 = ...     # O coverage
+
+theta0 = [thetaA_Star0, thetaA_H0, thetaA_OH0, thetaA_O0]
+
 # Linear sweep voltammetrty- defining a potential as a function of time
 def potential(x):
+    x = np.atleast_1d(x).astype(float)
     UpperV = 0.95
     LowerV = 0.6
-    scanrate = 0.05 #scan rate in V/s
-    timescan=(UpperV-LowerV)/(scanrate)
-    if x%(2*timescan)<timescan:
-            Vapp = LowerV + scanrate*(x%((UpperV-LowerV)/(scanrate)))
-    else:
-            Vapp = UpperV - scanrate*(x%((UpperV-LowerV)/(scanrate)))
-    return Vapp
+    scanrate = 0.05  # V/s
+    timescan = (UpperV - LowerV) / scanrate
+    modtime = x % (2 * timescan)
+
+    Vapp = np.where(
+        modtime < timescan,
+        LowerV + scanrate * modtime,
+        UpperV - scanrate * (modtime - timescan)
+    )
+
+    return Vapp[0] if Vapp.size == 1 else Vapp
+
 
 # Defining free energies of adsorption and programming adsorption isotherms
 def Gad(theta):
@@ -78,11 +92,11 @@ def rates(theta, V):
     return r
 
 # Function to calculate site balances from elementary reaction steps - this is the ODE
-def sitebal(theta,t,oparams):
-    V = potential(t)  # unpack applied voltage, other params?
-    r0, r1, r2 = rates(theta,V) # this calls the rate function, which calls eq pot
-    dthetadt = [(r1-r0)/cmax, (r0)/cmax, (r2-r1)/cmax, (-r2)/cmax] # these are the site balnaces
-    return dthetadt 
+def sitebal(time, theta, oparams):
+    V = potential(time)
+    r0, r1, r2 = rates(theta, V)
+    dthetadt = [(r1 - r0) / cmax, r0 / cmax, (r2 - r1) / cmax, -r2 / cmax]
+    return dthetadt
 
 
 
@@ -112,8 +126,9 @@ theta0 = [thetaA_Star0, thetaA_H0, thetaA_OH0, thetaA_O0]  #pack into list of in
 # Make time array for solution in seconds
 tStop = 64.
 tInc = 0.01
-t = np.arange(0., tStop, tInc)
 ts =int(tStop/tInc)
+t = np.linspace(0., tStop, ts)
+
 
 # defining empty arrays for potential, kinetic and total current density
 E = np.empty(ts, dtype=object)
@@ -136,14 +151,14 @@ plt.show()
 
 
 # Call the ODE solver
-soln1 = odeint(sitebal, theta0, t, args=(oparams,))
-
+soln1 = solve_ivp(sitebal, (t[0], t[-1]), theta0, t_eval=t, method = 'LSODA' , args=(oparams,), atol = 1e-9, rtol = 1e-6)
 
 
 # plot coverage as a function of time
-plt.plot(t, soln1[:, 0], 'm', label='*')
-plt.plot(t, soln1[:, 2], 'b', label='OH')
-plt.plot(t, soln1[:, 3], 'g', label='O')
+plt.plot(soln1.t, soln1.y[0], 'm', label='*')
+plt.plot(soln1.t, soln1.y[1], 'r', label='H')
+plt.plot(soln1.t, soln1.y[2], 'b', label='OH')
+plt.plot(soln1.t, soln1.y[3], 'g', label='O')
 
 
 plt.legend(loc='best')
@@ -152,9 +167,11 @@ plt.ylabel('Coverages')
 plt.show()
 
 # plot coverages on *A sites as a function of potential
-plt.plot(E[10:], soln1[10:, 0], 'm', label='*')
-plt.plot(E[10:], soln1[10:, 2], 'b', label='OH')
-plt.plot(E[10:], soln1[10:, 3], 'g', label='O')
+plt.plot(E[:len(soln1.t)], soln1.y[0], 'm', label='*')
+plt.plot(E[:len(soln1.t)], soln1.y[2], 'b', label='OH')
+plt.plot(E[:len(soln1.t)], soln1.y[3], 'g', label='O')
+
+
 
 
 
@@ -164,11 +181,12 @@ plt.ylabel('Coverages')
 plt.show()
 
 
-for i in range(ts):
-    theta_temp=soln1[i,:]
-    Vapp=potential(t[i])
-    R=rates(theta_temp, Vapp)
-    curr1[i]=-1000*F*(R[0]+R[1]+R[2])
+for i in range(soln1.y.shape[1]):
+    theta_temp = soln1.y[:, i]  # ← each column is a [θ*, θH, θOH, θO] at time t[i]
+    Vapp = potential(t[i])
+    R = rates(theta_temp, Vapp)
+    curr1[i] = -1000 * F * (R[0] + R[1] + R[2])
+
 
 # plot kinetic current desnity as a function of potential
 plt.plot(E[10:20000], curr1[10:20000], 'b')
