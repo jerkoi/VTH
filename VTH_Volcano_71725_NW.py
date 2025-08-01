@@ -2,19 +2,32 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
+# Ask user for mechanism choice
+while True:
+    mechanism_choice = input(
+        "Choose mechanism:\n"
+        f"{'Volmer RDS Tafel Fast (0)'.rjust(40)}\n"
+        f"{'Volmer RDS Heyrovsky Fast (1)'.rjust(40)}\n")
+    if mechanism_choice in ["0", "1"]:
+        break  # Exit the loop if input is valid
+    print("Invalid choice. Please enter 0 or 1.")
+
+# Convert to integer for logic checks
+mechanism_choice = int(mechanism_choice)
+
 # Physical Constants
 RT = 8.314 * 298  # ideal gas law times temperature
 F = 96485.0  # Faraday constant, C/mol
-cmax = 7.5 * 10e-10  # mol*cm-2*s-1
+cmax = 7.5 * 10e-9  # mol*cm-2*s-1
 
 # Model Parameters
 Avo = 6.022 * 10 ** 23
 conversion_factor = 1.60218e-19  # Conversion factor from eV to J
-k_H = 1
-k_V = cmax * 10 ** 2.75
+k_V = cmax * 10 ** -5.4
 k_T = k_V * 1000
+k_H = k_V * 1000
 partialPH2 = 1
-beta = 0.35
+beta = [0.35, 0.5]
 # GHad = -0.3 * Avo * conversion_factor  # Convert GHad from eV to J
 period = 0.5  # seconds
 
@@ -24,14 +37,14 @@ dGmax_eV = 0.3
 
 # dG values, dynamic volcano
 dGmin_dynamic = 0.08  # in eV
-dGmax_dynamic = 0.15  # in eV
+dGmax_dynamic = 0.10  # in eV
 
 # # potential sweep & time
 # UpperV = 0.05
 # LowerV = -0.5
 # scanrate = 0.025  #scan rate in V/s
 # timescan = (UpperV-LowerV)/(scanrate)
-max_time = 10  # seconds
+max_time = 20  # seconds
 t = np.linspace(0.0, max_time, int(max_time / (period / 25)) + 1)
 endtime = t[-1]
 duration = [0, max_time]
@@ -40,10 +53,7 @@ time_index = [t]
 # Initial conditions
 thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
-theta0_H = 1 / (1 + np.exp((dGmin_eV * Avo * conversion_factor) / RT))
-theta0 = [theta0_H, 1 - theta0_H]
-
-print("Initial thetaA_H0:", theta0)
+theta0 = [thetaA_H0, thetaA_Star0]
 
 # === Prompt User ===
 print("Choose which simulations to run:")
@@ -76,7 +86,14 @@ if do_dynamic_ghad:
         U_V = (-GHad / F) + (RT * np.log(thetaA_star / thetaA_H)) / F
         # U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
 
-        return U_V
+        ##Heyrovsky
+        U_H = 0
+        if mechanism_choice == 0:
+            U_11 = GHad / F
+            U_12 = (RT / F) * np.log(thetaA_H / thetaA_star)
+            U_H = U_11 + U_12
+
+        return U_V, U_H
 
 
     # reduction is FORWARD, oxidation is REVERSE, all variables are consistent with this
@@ -85,22 +102,38 @@ if do_dynamic_ghad:
         theta = np.asarray(theta)
         thetaA_star, thetaA_H = theta  # surface coverages again, acting as concentrations
         V = potential(t)  # Use t directly (scalar)
-        U_V = eqpot(theta, GHad)  # call function to find U for given theta
+        U_V, U_H = eqpot(theta, GHad)  # call function to find U for given theta
 
         ##Volmer Rate Equation
-        r_V = k_V * (thetaA_star ** (1 - beta)) * (thetaA_H ** beta) * np.exp(beta * GHad / RT) * (
-                    np.exp(-(beta) * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT))
+        r_V = k_V * (thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT) * (
+                    np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
 
-        r_T = k_T * ((thetaA_H ** 2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2 * GHad) / RT)))
+        r_T = 0
+        if mechanism_choice == 0:
+            r_T = k_T * ((thetaA_H ** 2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2 * GHad) / RT)))
 
-        return r_V, r_T
+        ##Heyrovsky Rate Equation
+        r_H = 0
+        if mechanism_choice == 1:
+            j1 = k_H * np.exp(-beta[1] * GHad / RT) * thetaA_star ** beta[1] * thetaA_H ** (1 - beta[1])
+            exp21 = np.exp(-beta[1] * F * (V - U_H) / RT)
+            exp22 = np.exp((1 - beta[1]) * F * (V - U_H) / RT)
+            r_H = j1 * (exp21 - exp22)
+
+        return r_V, r_T, r_H
 
 
     def sitebal(t, theta):
-        r_V, r_T = rates_r0(t, theta)
-        dtheta_star_dt = (-r_V + 2 * r_T) / cmax
-        dtheta_H_dt = (r_V - 2 * r_T) / cmax
-        return [dtheta_star_dt, dtheta_H_dt]
+        r_V, r_T, r_H = rates_r0(t, theta)
+        if mechanism_choice in [0]:
+            thetaStar_rate_VT = (-r_V + (2 * r_T)) / cmax
+            thetaH_rate_VT = (r_V - (2 * r_T)) / cmax
+            dthetadt = [(thetaStar_rate_VT), thetaH_rate_VT]  # [0 = star, 1 = H]
+        elif mechanism_choice in [1]:
+            theta_star_rate = r_H - r_V  # summing all step rates based on how they affect theta_star
+            theta_H_rate = r_V - r_H  # summing all step rates based on how they affect theta_H
+            dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
+        return dthetadt
 
 
     soln = solve_ivp(sitebal, duration, theta0, t_eval=t, method='BDF', dense_output=True)
@@ -119,9 +152,7 @@ if do_dynamic_ghad:
     plt.subplot(3, 1, 1)
     plt.plot(t, curr_dynamic, label='Volmer Current')
     plt.ylabel("Current Density (mA/cm²)")
-    plt.title("Dynamic GHad(t): Current vs Time, $k_V$ = {:.2e}, $k_T$ = {:.2e}, $beta$ = {:.2f}".format(k_V / cmax,
-                                                                                                         k_T / cmax,
-                                                                                                         beta))
+    plt.title("Dynamic GHad(t): Current vs Time, $k_V$ = {:.2e}, $k_T$ = {:.2e}, period = {:.2e}".format(k_V / cmax, k_T / cmax, period))
     plt.legend()
 
     plt.subplot(3, 1, 2)
@@ -166,29 +197,61 @@ if do_static_volcano:
 
 
         def eqpot(theta):
-            theta_star, theta_H = theta
-            return (-GHad / F) + (RT * np.log(theta_star / theta_H)) / F
+            theta = np.asarray(theta)
+            thetaA_star, thetaA_H = theta  # unpack surface coverage
+
+            ##Volmer
+            U_V = 0
+            U_V = (-GHad / F) + (RT * np.log(thetaA_star / thetaA_H)) / F
+            # U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
+
+            ##Heyrovsky
+            U_H = 0
+            if mechanism_choice == 1:
+                U_11 = GHad / F
+                U_12 = (RT / F) * np.log(thetaA_H / thetaA_star)
+                U_H = U_11 + U_12
+
+            return U_V, U_H
 
 
         def rates_r0(t, theta):
-            theta_star, theta_H = theta
-            V = potential(t)
-            U_V = eqpot(theta)
-            exp_beta = np.exp(beta * GHad / RT)
-            exp_neg2 = np.exp(-2 * GHad / RT)
+            theta = np.asarray(theta)
+            thetaA_star, thetaA_H = theta  # surface coverages again, acting as concentrations
+            V = potential(t)  # Use t directly (scalar)
+            U_V, U_H = eqpot(theta)  # call function to find U for given theta
 
-            r_V = k_V * (theta_star ** (1 - beta)) * (theta_H ** beta) * exp_beta * (
-                    np.exp(-beta * F * (V - U_V) / RT) - np.exp((1 - beta) * F * (V - U_V) / RT)
-            )
-            r_T = k_T * (theta_H ** 2 - partialPH2 * (theta_star ** 2) * exp_neg2)
-            return r_V, r_T
+            ##Volmer Rate Equation
+            r_V = k_V * (thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT) * (
+                        np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
+
+            ##Tafel Rate Equation
+            r_T = 0
+            if mechanism_choice == 0:
+                r_T = k_T * ((thetaA_H ** 2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2 * GHad) / RT)))
+
+            ##Heyrovsky Rate Equation
+            r_H = 0
+            if mechanism_choice == 1:
+                j1 = k_H * np.exp(-beta[1] * GHad / RT) * thetaA_star ** beta[1] * thetaA_H ** (1 - beta[1])
+                exp21 = np.exp(-beta[1] * F * (V - U_H) / RT)
+                exp22 = np.exp((1 - beta[1]) * F * (V - U_H) / RT)
+                r_H = j1 * (exp21 - exp22)
+
+            return r_V, r_T, r_H
 
 
         def sitebal(t, theta):
-            r_V, r_T = rates_r0(t, theta)
-            dtheta_star_dt = (-r_V + 2 * r_T) / cmax
-            dtheta_H_dt = (r_V - 2 * r_T) / cmax
-            return [dtheta_star_dt, dtheta_H_dt]
+            r_V, r_T, r_H = rates_r0(t, theta)
+            if mechanism_choice in [0, 2]:
+                thetaStar_rate_VT = (-r_V + (2 * r_T)) / cmax
+                thetaH_rate_VT = (r_V - (2 * r_T)) / cmax
+                dthetadt = [(thetaStar_rate_VT), thetaH_rate_VT]  # [0 = star, 1 = H]
+            elif mechanism_choice in [1, 3]:
+                theta_star_rate = r_H - r_V  # summing all step rates based on how they affect theta_star
+                theta_H_rate = r_V - r_H  # summing all step rates based on how they affect theta_H
+                dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
+            return dthetadt
 
 
         soln = solve_ivp(sitebal, duration, theta0, t_eval=t, method='BDF')
@@ -213,7 +276,7 @@ if do_static_volcano:
     plt.xlabel("GHad (eV)")
     plt.ylabel("Max |Current Density| (mA/cm²)")
     plt.title(
-        f"Volcano Plot: Max Current vs GHad, $k_V$ ={k_V / cmax:.2e}, $k_T$ = {k_T / cmax:.2e}, $beta$ = {beta}, $V$ = {potential(t)}")
+        f"Volcano Plot: Max Current vs GHad, $k_V$ ={k_V / cmax:.2e}, $k_T$ = {k_T / cmax:.2e}, $beta$ = {beta[0]}, $V$ = {potential(t)}")
     plt.grid(True)
     plt.tight_layout()
     plt.show()

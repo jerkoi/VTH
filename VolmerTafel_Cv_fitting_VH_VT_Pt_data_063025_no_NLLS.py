@@ -438,5 +438,3 @@ for i in range(2, 9):
 
 # for idx, (v, i) in enumerate(intersections):
 #     print(f"Intersection {idx+1}: V = {v:.4f} V, I = {i:.4f} mA/cm²")
-
-

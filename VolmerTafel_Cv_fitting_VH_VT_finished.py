@@ -20,10 +20,10 @@ cmax = 7.5e-9     # mol/cm²
 conversion_factor = 1.60218e-19  # eV to J
 AvoNum = 6.02e23  # 1/mol
 partialPH2 = 1.0
-beta = 0.1
+beta = 0.35
 
 k_H = cmax * 10**-5.4
-k_V = cmax * 10**-1.4
+k_V = cmax * 10**1.5
 k_T = k_V * 1000
 
 GHad = -0.3 * AvoNum * conversion_factor  # Convert GHad from eV to J
@@ -63,7 +63,7 @@ mechanism_choice = int(mechanism_choice)
 def potential(x):
     if x%(2*timescan)<timescan:
         return UpperV - scanrate*((x - timescan) % timescan)
-    else:   
+    else:
         return LowerV + scanrate*(x% timescan)
 
 
