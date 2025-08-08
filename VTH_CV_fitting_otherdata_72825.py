@@ -45,7 +45,7 @@ conversion_factor = 1.60218e-19  # eV to J
 AvoNum = 6.02e23  # 1/mol
 partialPH2 = 1.0
 beta = [0.35, 0.5]
-GHad_eV = 0.1
+GHad_eV = -0.3
 
 k_V_RDS = cmax * 10**3.7
 
@@ -59,8 +59,8 @@ elif mechanism_choice == 1:
 GHad = GHad_eV * AvoNum * conversion_factor  # Convert GHad from eV to J
 
 # # potential sweep & time
-UpperV = -0.10
-LowerV = -0.10
+UpperV = 0
+LowerV = -0.25
 scanrate = 0.05  #scan rate in V/s
 timescan = 2*(UpperV-LowerV)/(scanrate)
 max_time = 20
@@ -82,16 +82,16 @@ theta0 = np.array([thetaA_Star0, thetaA_H0])
 
 # Linear sweep voltammetry- defining a potential as a function of time
 def potential(x):
-    # #timescan above is the same as single_sweep_time
-    # single_sweep_time = (UpperV - LowerV) / scanrate
-    # cycle_time = 2 * single_sweep_time
-    #
-    # t_in_cycle = x % cycle_time
-    return -0.1
-    # if t_in_cycle < single_sweep_time: #forward
-    #     return UpperV - scanrate * t_in_cycle
-    # else: #reverse
-    #     #return LowerV + scanrate * (t_in_cycle - single_sweep_time)
+    #timescan above is the same as single_sweep_time
+    single_sweep_time = (UpperV - LowerV) / scanrate
+    cycle_time = 2 * single_sweep_time
+
+    t_in_cycle = x % cycle_time
+
+    if t_in_cycle < single_sweep_time: #forward
+        return UpperV - scanrate * t_in_cycle
+    else: #reverse
+        return LowerV + scanrate * (t_in_cycle - single_sweep_time)
 
 #Function to calculate U and Keq from theta, dG
 def eqpot(theta):
@@ -203,7 +203,7 @@ def r_squared(data1, data2):
     return 1 - (ss_res/ss_tot)
 
 mask_min = -0.25
-mask_max = 0.01
+mask_max = -0.01
 
 #model mask, pristine only
 model_mask = (V_model <= mask_max) & (V_model >= mask_min)
@@ -240,42 +240,42 @@ print(fr"R² for V_{scan_id} vs Model: {r2_scan:.4f}")
 ###########################################################################################################################
 ###########################################################################################################################
 
-# #standard CV plot
-# fig, axs = plt.subplots(figsize=(8, 10))
-# axs.plot(V_model[4:], curr_model[4:], 'r', label='Model Data')
-# #axs.plot(Pt_experi_V, Pt_experi_I, 'g', label='Platinum Experimental Data')
-# axs.plot(V_exp_masked, I_exp_masked, 'b', label = f'H2 Saturated Data, {scan_id}')
-# #axs.set_xlim(None, 0)
-# axs.set_xlabel('Voltage vs. RHE (V)')
-# #axs.set_ylim(None, 0)
-# axs.set_ylabel('Kinetic current (mA/cm2)')
-# axs.set_title(fr'Kinetic Current vs Voltage, V_{scan_id} vs Model, $R²$ = {r2_scan:.4f}')
-# axs.grid()
-# axs.legend()
-# plt.show()
-#
-# #Tafel Plot
-# fig, ax = plt.subplots(figsize=(8, 6))
-# #ax.plot(np.abs(Pt_experi_I), Pt_experi_V, 'r', label='Experimental Data')
-# ax.plot(np.abs(I_model_interp[4:]), V_exp_masked[4:], 'r', label='Model Data')
-# ax.plot(np.abs(I_exp_masked[4:]), V_exp_masked[4:], 'b', label = f'H2 Saturated Data, {scan_id}')
-# ax.set_xlabel('Log Kinetic currkent (mA/cm2)')
-# ax.set_ylabel('Voltage vs. RHE (V)')
-# ax.set_title(fr'Log Kinetic Current vs Voltage, V_{scan_id} vs Model, $R²$ = {r2_scan:.4f}')
-# ax.semilogx()
-# #ax.set_ylim(None, 0)
-# ax.grid()
-# ax.legend()
-# plt.show()
-
-plt.figure(figsize=(8,6))
-plt.plot(t, curr_model, label='Model Current vs Time')
-plt.xlabel("Time (s)")
-plt.ylabel("Current (mA/cm²)")
-plt.title("Current vs Time")
-plt.grid()
-plt.legend()
+#standard CV plot
+fig, axs = plt.subplots(figsize=(8, 10))
+axs.plot(V_model[4:], curr_model[4:], 'r', label='Model Data')
+#axs.plot(Pt_experi_V, Pt_experi_I, 'g', label='Platinum Experimental Data')
+axs.plot(V_exp_masked, I_exp_masked, 'b', label = f'H2 Saturated Data, {scan_id}')
+#axs.set_xlim(None, 0)
+axs.set_xlabel('Voltage vs. RHE (V)')
+#axs.set_ylim(None, 0)
+axs.set_ylabel('Kinetic current (mA/cm2)')
+axs.set_title(fr'Kinetic Current vs Voltage, V_{scan_id} vs Model, $R²$ = {r2_scan:.4f}')
+axs.grid()
+axs.legend()
 plt.show()
+
+#Tafel Plot
+fig, ax = plt.subplots(figsize=(8, 6))
+#ax.plot(np.abs(Pt_experi_I), Pt_experi_V, 'r', label='Experimental Data')
+ax.plot(np.abs(I_model_interp[4:]), V_exp_masked[4:], 'r', label='Model Data')
+ax.plot(np.abs(I_exp_masked[4:]), V_exp_masked[4:], 'b', label = f'H2 Saturated Data, {scan_id}')
+ax.set_xlabel('Log Kinetic currkent (mA/cm2)')
+ax.set_ylabel('Voltage vs. RHE (V)')
+ax.set_title(fr'Log Kinetic Current vs Voltage, V_{scan_id} vs Model, $R²$ = {r2_scan:.4f}')
+ax.semilogx()
+#ax.set_ylim(None, 0)
+ax.grid()
+ax.legend()
+plt.show()
+
+# plt.figure(figsize=(8,6))
+# plt.plot(t, curr_model, label='Model Current vs Time')
+# plt.xlabel("Time (s)")
+# plt.ylabel("Current (mA/cm²)")
+# plt.title("Current vs Time")
+# plt.grid()
+# plt.legend()
+# plt.show()
 
 df_compare = pd.DataFrame({
     "Experimental Current": I_exp_masked[2:],

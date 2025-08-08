@@ -30,7 +30,7 @@ Avo = 6.02e23  # 1/mol
 partialPH2 = 1.0
 beta = [0.35, 0.5]
 GHad_eV = -0.3
-period = 0.1 #seconds
+period = 2 #seconds
 
 k_V_RDS = cmax * 10**3.7
 
@@ -49,7 +49,7 @@ dGmax_eV = 0.3
 dGmin_dynamic = 0.05  # in eV
 dGmax_dynamic = 0.15  # in eV
 
-max_time = 20  # seconds
+max_time = 5 + 10 * period  # seconds
 interval_factor = 100
 t = np.linspace(0.0, max_time, int(max_time / (period / interval_factor)) + 1)
 t_switching = 5
@@ -57,7 +57,7 @@ duration = [0, max_time]
 time_index = [t]
 
 # Initial conditions
-thetaA_H0 = 0.99  # Initial coverage of Hads, needs to be high as this is reduction forward
+thetaA_H0 = 0.5  # Initial coverage of Hads, needs to be high as this is reduction forward
 thetaA_Star0 = 1.0 - thetaA_H0  # Initial coverage of empty sites
 theta0 = [thetaA_Star0, thetaA_H0]
 
@@ -71,6 +71,8 @@ dynamic_overlay_points = []
 
 # === DYNAMIC GHad(t) SIMULATION ===
 if do_dynamic_ghad:
+    T1_index = []
+    T2_index = []
     print("\nRunning dynamic GHad(t) simulation...")
     thetaH_array = []
     # Time-varying GHad values (in J)
@@ -88,10 +90,15 @@ if do_dynamic_ghad:
     #setting potential for static hold
     def potential(t): return -0.1
 
+    #solve for initial coverage after each iteration of solve_ivp
+    def equil_theta(GHad, t):
+        V = potential(0)
+
     #equil
     def eqpot(theta, GHad):
         theta = np.asarray(theta)
         thetaA_star, thetaA_H = theta  # unpack surface coverage
+
         ##Volmer
         U_V = (-GHad / F) + (RT * np.log(thetaA_star / thetaA_H)) / F
         # U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
@@ -123,6 +130,7 @@ if do_dynamic_ghad:
             T_1 = (thetaA_H ** 2)
             T_2 = (partialPH2 * (thetaA_star ** 2) * np.exp((-2 * GHad) / RT))
             r_T = k_T * (T_1 - T_2)
+
             #r_T = k_T * ((thetaA_H ** 2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2 * GHad) / RT)))
         ##Heyrovsky Rate Equation
         r_H = 0
@@ -132,6 +140,8 @@ if do_dynamic_ghad:
             exp22 = np.exp((1 - beta[1]) * F * (V - U_H) / RT)
             r_H = j1 * (exp21 - exp22)
 
+        # T1_index.append(T_1)
+        # T2_index.append(T_2)
         return r_V, r_T, r_H
 
 
@@ -148,6 +158,9 @@ if do_dynamic_ghad:
         return dthetadt
 
 
+    T1_index.clear()
+    T2_index.clear()
+
     soln = solve_ivp(sitebal, duration, theta0, t_eval=t, method='BDF', dense_output=True)
     theta_at_t = soln.sol(t)  # shape: (2, len(t))
     r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, theta_at_t.T)])
@@ -157,18 +170,32 @@ if do_dynamic_ghad:
     GHad_t_J = np.array([dGvt(time) for time in t])
     GHad_t_eV = GHad_t_J / (Avo * conversion_factor)
 
+
+    ##### equilibrium section#######
+    def thetaH_equilibrium(GHad_array):
+        GHad_array = np.asarray(GHad_array)  # Ensure it's an array
+        V = potential(0)  # constant voltage
+        return 1 / (1 + np.exp((F * V + GHad_array) / RT))
+
+    thetaH_equil_array = thetaH_equilibrium(GHad_t_J)
+
+    plt.plot(t[4000:6000], theta_at_t[1, 4000:6000], label="ODE theta_H")
+    plt.plot(t[4000:6000], thetaH_equil_array[4000:6000], '--', label="Equilibrium theta_H")
+    plt.legend()
+
     thetaH_array = theta_at_t[1, :]  # thetaA_H values
 
+    cut = 5
     # Plot
     plt.figure(figsize=(12, 6))
     plt.subplot(3, 1, 1)
-    plt.plot(t, curr_dynamic, label='Volmer Current')
+    plt.scatter(t[cut:], curr_dynamic[cut:], label='Volmer Current')
     plt.ylabel("Current Density (mA/cm²)")
     plt.title("Dynamic GHad(t): Current vs Time, $k_V$ = {:.2e}, $k_T$ = {:.2e}, period = {:.2e}".format(k_V / cmax, k_T / cmax, period))
     plt.legend()
 
     plt.subplot(3, 1, 2)
-    plt.plot(t, GHad_t_eV)
+    plt.scatter(t[cut:], GHad_t_eV[cut:])
     plt.ylabel("GHad (eV)")
     plt.xlabel("Time (s)")
     plt.title("Dynamic GHad(t): GHad vs Time")
@@ -180,7 +207,7 @@ if do_dynamic_ghad:
     plt.ylabel("Coverage (Theta H)")
     plt.xlabel("Time (s)")
     plt.title("Dynamic GHad(t): Coverage vs Time")
-    plt.plot(t, thetaH_array, label='Theta H', color="g")
+    plt.scatter(t[cut:], thetaH_array[cut:], label='Theta H', color="g")
     plt.show()
 
     plt.figure(figsize=(12,6))
@@ -188,6 +215,18 @@ if do_dynamic_ghad:
     plt.plot(t[1:], r_T_vals[1:], label='r_T')
     plt.grid(True)
     plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(T1_index[100:2000], label='T1')
+    plt.plot(T2_index[100:2000], label='T2')
+    plt.plot(r_T_vals[100:2000], label='r_T')
+    plt.xlabel("Evaluation index (arbitrary units)")
+    plt.ylabel("Value")
+    plt.title(rf"Sequential Evaluation of T1, T2, and r_T, period = {period} seconds")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
     plt.show()
 
     print(thetaH_array)
