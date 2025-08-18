@@ -49,11 +49,15 @@ dGmax_eV = 0.3
 dGmin_dynamic = 0.05 # in eV
 dGmax_dynamic = 0.10  # in eV
 
-t_switching = 0.5 #seconds, initial equilibrium period before switching
-max_time = t_switching + 4 * period  # seconds
-interval_factor = 1000
-t = np.linspace(0.0, max_time, int(max_time / (period / interval_factor)) + 1)
-duration = [0, max_time]
+#time spacing
+t_switching = 1 #no dynamic switching before this time
+max_time = np.arange(100) #seconds
+mt_length = len(max_time)
+interval_factor = 100000
+t = np.linspace(1, max_time[-1], num = int(interval_factor * t_switching))
+
+print(f"Time vector length: {len(t)}")
+duration = [0, mt_length]
 time_index = [t]
 
 # Initial conditions
@@ -63,7 +67,6 @@ theta0 = [thetaA_Star0, thetaA_H0]
 
 # === Prompt User ===
 print("Choose which simulations to run:")
-do_static_volcano = input("Run static volcano plot? (y/n): ").strip().lower() == 'y'
 do_dynamic_ghad = input("Run dynamic GHad(t) simulation? (y/n): ").strip().lower() == 'y'
 
 # === Prepare dynamic overlay variables ===
@@ -73,8 +76,6 @@ dynamic_overlay_points = []
 if do_dynamic_ghad:
     T1_index = []
     T2_index = []
-    V1_index = []
-    V2_index = []
     print("\nRunning dynamic GHad(t) simulation...")
     thetaH_array = []
     # Time-varying GHad values (in J)
@@ -120,9 +121,8 @@ if do_dynamic_ghad:
         U_V, U_H = eqpot(theta, GHad)  # call function to find U for given theta
 
         ##Volmer Rate Equation
-        V1 = k_V * ((thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT))
-        V2 = (np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
-        r_V = V1 * V2
+        r_V = k_V * (thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT) * (
+                    np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
 
         r_T = 0
         if mechanism_choice == 0:
@@ -139,10 +139,8 @@ if do_dynamic_ghad:
             exp22 = np.exp((1 - beta[1]) * F * (V - U_H) / RT)
             r_H = j1 * (exp21 - exp22)
 
-        T1_index.append(T_1)
-        T2_index.append(T_2)
-        V1_index.append(V1)
-        V2_index.append(V2)
+        # T1_index.append(T_1)
+        # T2_index.append(T_2)
         return r_V, r_T, r_H
 
 
@@ -158,10 +156,12 @@ if do_dynamic_ghad:
             dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
         return dthetadt
 
+
+    # clear T1 and T2 index because it is recomputed after solve_ivp runs
     T1_index.clear()
     T2_index.clear()
 
-    soln = solve_ivp(sitebal, duration, theta0, t_eval = t, method ='BDF', dense_output=True, full_output = True)
+    soln = solve_ivp(sitebal, duration, theta0, t_eval = t, method ='BDF')
     theta_at_t = soln.y  # shape: (2, len(t))
     thetaH_array = theta_at_t[1, :]
 
@@ -175,68 +175,78 @@ if do_dynamic_ghad:
 
     print("Solver steps taken:", len(soln.t))
 
-    plt.plot(t, r_V_vals)
+    plt.figure(figsize=(12, 6))
+    plt.plot(t, thetaH_array, label='Theta H')
     plt.title("Rate of change of Theta_H over time")
     plt.xlabel("Time (s)")
-    plt.ylabel("r_V Values")
+    plt.ylabel("d(Theta_H)/dt")
     plt.grid()
     plt.show()
 
-    cut = 5
+    cut1 = 2000
+    cut = 600
     # Plot
-    plt.figure(figsize=(12, 6))
-    plt.subplot(3, 1, 1)
-    plt.plot(t[cut:], curr_dynamic[cut:], label='Volmer Current')
+    plt.figure(figsize=(16, 12))
+    plt.subplot(4, 1, 1)
+    plt.plot(t, curr_dynamic, label='Volmer Current', marker = "o")
     plt.ylabel("Current Density (mA/cm²)")
     plt.title("Dynamic GHad(t): Current vs Time, $k_V$ = {:.2e}, $k_T$ = {:.2e}, period = {:.2e}".format(k_V / cmax, k_T / cmax, period))
     plt.legend()
 
-    plt.subplot(3, 1, 2)
-    plt.plot(t[cut:], GHad_t_eV[cut:])
+    plt.subplot(4, 1, 2)
+    plt.plot(t, GHad_t_eV, marker= 'o')
     plt.ylabel("GHad (eV)")
     plt.xlabel("Time (s)")
     plt.title("Dynamic GHad(t): GHad vs Time")
     plt.tight_layout()
 
-    plt.subplot(3, 1, 3)
+    print("Length of theta H array: ", len(thetaH_array))
+
+    plt.subplot(4, 1, 3)
     plt.ylabel("Coverage (Theta H)")
     plt.xlabel("Time (s)")
     plt.title("Dynamic GHad(t): Coverage vs Time")
     plt.ylim(0, 0.4)
-    plt.plot(t[cut:], thetaH_array[cut:], label='Theta H', color="g")
-    plt.show()
+    plt.plot(t, thetaH_array, label='Theta H', color="g", marker='o')
 
-    plt.figure(figsize=(12,6))
-    plt.plot(t[1:], r_V_vals[1:], label='r_V')
-    plt.plot(t[1:], r_T_vals[1:], label='r_T')
+    plt.subplot(4, 1, 4)
+    plt.ylabel('Time')
+    plt.xlabel('Index')
+    plt.title("Time vs Index")
+    plt.plot(t, marker='o')
     plt.grid(True)
-    plt.legend()
-    plt.show()
-    
-    plt.figure(figsize=(12, 6))
-    plt.plot(T1_index, label='T1')
-    plt.plot(T2_index, label='T2')
-    plt.plot(r_T_vals, label='r_T')
-    plt.xlabel("Evaluation index (arbitrary units)")
-    plt.ylabel("Value")
-    plt.title(rf"Sequential Evaluation of T1, T2, and r_T, period = {period} seconds")
-    plt.grid(True)
-    plt.legend()
     plt.tight_layout()
     plt.show()
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(V1_index, label='V1')
-    plt.plot(V2_index, label='V2')
-    plt.plot(r_V_vals[100:2000], label='r_V')
-    plt.plot(t, label = 'Time')
-    plt.xlabel("Evaluation index (arbitrary units)")
-    plt.ylabel("Value")
-    plt.title(rf"Sequential Evaluation of V1, V2, and r_V, period = {period} seconds")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    print("ThetaH Average", np.average(thetaH_array))
+
+    # # Assuming t is already defined
+    # plt.figure(figsize=(8, 4))
+    # plt.plot(t, marker='o')
+    # plt.xlabel("Index")
+    # plt.ylabel("Time (s)")
+    # plt.title("Time Array (t)")
+    # plt.grid(True)
+    # plt.show()
+
+    # plt.figure(figsize=(12,6))
+    # plt.plot(t[1:], r_V_vals[1:], label='r_V')
+    # plt.plot(t[1:], r_T_vals[1:], label='r_T')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.show()
+    #
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(T1_index[100:2000], label='T1')
+    # plt.plot(T2_index[100:2000], label='T2')
+    # plt.plot(r_T_vals[100:2000], label='r_T')
+    # plt.xlabel("Evaluation index (arbitrary units)")
+    # plt.ylabel("Value")
+    # plt.title(rf"Sequential Evaluation of T1, T2, and r_T, period = {period} seconds")
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
 
     print(thetaH_array)
 
@@ -253,17 +263,13 @@ if do_dynamic_ghad:
 
     # Create a DataFrame
     data = {
-        "V1": V1_index,
-        "V2": V2_index,
-        "T1": T1_index,
-        "T2": T2_index,
-        # "r_V_vals": r_V_vals,
-        # "r_T_vals": r_T_vals,
-        # "Theta_H": thetaH_array,
-        # "GHad (eV)": GHad_t_eV,
-        # "Current (mA/cm²)": curr_dynamic
+        "Time (s)": t,
+        "r_V_vals": r_V_vals,
+        "r_T_vals": r_T_vals,
+        "Theta_H": thetaH_array,
+        "GHad (eV)": GHad_t_eV,
+        "Current (mA/cm²)": curr_dynamic
     }
-
     df = pd.DataFrame(data)
 
     # Save to Excel
@@ -271,108 +277,3 @@ if do_dynamic_ghad:
     df.to_excel(output_filename, index=False)
 
     print(f"\n Results exported to Excel: {output_filename}")
-
-# === STATIC VOLCANO PLOT ===
-if do_static_volcano:
-    print("\nRunning static volcano plot...")
-
-    GHad_eV_list = np.linspace(dGmin_eV, dGmax_eV, 25)
-    GHad_J_list = GHad_eV_list * Avo * conversion_factor
-    GHad_results = []
-
-    for GHad, GHad_eV in zip(GHad_J_list, GHad_eV_list):
-        def potential(t): return -0.1
-
-
-        def eqpot(theta):
-            theta = np.asarray(theta)
-            thetaA_star, thetaA_H = theta  # unpack surface coverage
-
-            ##Volmer
-            U_V = 0
-            U_V = (-GHad / F) + (RT * np.log(thetaA_star / thetaA_H)) / F
-            # U relies on the free energy of hydrogen adsorption plus the log of surface coverage (considered a concentration)
-
-            ##Heyrovsky
-            U_H = 0
-            if mechanism_choice == 1:
-                U_11 = GHad / F
-                U_12 = (RT / F) * np.log(thetaA_H / thetaA_star)
-                U_H = U_11 + U_12
-
-            return U_V, U_H
-
-
-        def rates_r0(t, theta):
-            theta = np.asarray(theta)
-            thetaA_star, thetaA_H = theta  # surface coverages again, acting as concentrations
-            V = potential(t)  # Use t directly (scalar)
-            U_V, U_H = eqpot(theta)  # call function to find U for given theta
-
-            ##Volmer Rate Equation
-            r_V = k_V * (thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT) * (
-                        np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
-
-            ##Tafel Rate Equation
-            r_T = 0
-            if mechanism_choice == 0:
-                r_T = k_T * ((thetaA_H ** 2) - (partialPH2 * (thetaA_star ** 2) * np.exp((-2 * GHad) / RT)))
-
-            ##Heyrovsky Rate Equation
-            r_H = 0
-            if mechanism_choice == 1:
-                j1 = k_H * np.exp(-beta[1] * GHad / RT) * thetaA_star ** beta[1] * thetaA_H ** (1 - beta[1])
-                exp21 = np.exp(-beta[1] * F * (V - U_H) / RT)
-                exp22 = np.exp((1 - beta[1]) * F * (V - U_H) / RT)
-                r_H = j1 * (exp21 - exp22)
-
-            return r_V, r_T, r_H
-
-
-        def sitebal(t, theta):
-            r_V, r_T, r_H = rates_r0(t, theta)
-            if mechanism_choice in [0, 2]:
-                thetaStar_rate_VT = (-r_V + (2 * r_T)) / cmax
-                thetaH_rate_VT = (r_V - (2 * r_T)) / cmax
-                dthetadt = [(thetaStar_rate_VT), thetaH_rate_VT]  # [0 = star, 1 = H]
-            elif mechanism_choice in [1, 3]:
-                theta_star_rate = r_H - r_V  # summing all step rates based on how they affect theta_star
-                theta_H_rate = r_V - r_H  # summing all step rates based on how they affect theta_H
-                dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
-            return dthetadt
-
-
-        soln = solve_ivp(sitebal, duration, theta0, t_eval=t, method='BDF')
-        r0_vals = np.array([rates_r0(time, theta) for time, theta in zip(t, soln.y.T)])
-        curr_static = r0_vals[:, 0] * -F * 1000  # mA/cm²
-        max_current = np.abs(curr_static[100])
-        GHad_results.append((GHad_eV, max_current))
-
-    print(f"Curr_model[400] = {curr_static[400]:.3f} mA/cm²")
-
-    # Volcano plot
-    GHad_vals, abs_currents = zip(*GHad_results)
-    plt.figure(figsize=(8, 5))
-    plt.plot(GHad_vals, abs_currents, marker='o', label='Static GHad Scan')
-
-    if dynamic_overlay_points:
-        for ghad_val, curr_val in dynamic_overlay_points:
-            plt.scatter([ghad_val], [curr_val], color='red', marker='x', s=100,
-                        label=f'Dynamic Max @ {ghad_val:.2f} eV and {curr_val:.2f} mA/cm²')
-        handles, labels = plt.gca().get_legend_handles_labels()
-        unique = dict(zip(labels, handles))
-        plt.legend(unique.values(), unique.keys())
-
-    plt.xlabel("GHad (eV)")
-    plt.ylabel("Max |Current Density| (mA/cm²)")
-    plt.title(
-        f"Volcano Plot: Max Current vs GHad, $k_V$ ={k_V / cmax:.2e}, $k_T$ = {k_T / cmax:.2e}, $beta$ = {beta[0]}, $V$ = {potential(t)}")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-    max_index = np.argmax(abs_currents)
-    print(f"\nMax Current (static): {abs_currents[max_index]:.3f} mA/cm² at GHad = {GHad_vals[max_index]:.3f} eV")
-    print("\nStatic Volcano Summary:")
-    for g, c in GHad_results:
-        print(f"GHad = {g:.3f} eV → Max |Current| = {c:.3f} mA/cm²")

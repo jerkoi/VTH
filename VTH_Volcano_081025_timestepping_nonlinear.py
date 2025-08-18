@@ -49,11 +49,17 @@ dGmax_eV = 0.3
 dGmin_dynamic = 0.05 # in eV
 dGmax_dynamic = 0.10  # in eV
 
-t_switching = 0.5 #seconds, initial equilibrium period before switching
-max_time = t_switching + 4 * period  # seconds
-interval_factor = 1000
-t = np.linspace(0.0, max_time, int(max_time / (period / interval_factor)) + 1)
-duration = [0, max_time]
+#time spacing
+t_switching = 1 #no dynamic switching before this time
+max_time = np.arange(100) #seconds
+mt_length = len(max_time)
+interval_factor = 100
+idx = np.geomspace(1, mt_length, num = int(interval_factor * t_switching), dtype=int) - 1
+idx = np.unique(idx)
+t = max_time[idx]
+
+print(f"Time vector length: {len(t)}")
+duration = [0, mt_length]
 time_index = [t]
 
 # Initial conditions
@@ -73,8 +79,6 @@ dynamic_overlay_points = []
 if do_dynamic_ghad:
     T1_index = []
     T2_index = []
-    V1_index = []
-    V2_index = []
     print("\nRunning dynamic GHad(t) simulation...")
     thetaH_array = []
     # Time-varying GHad values (in J)
@@ -120,9 +124,8 @@ if do_dynamic_ghad:
         U_V, U_H = eqpot(theta, GHad)  # call function to find U for given theta
 
         ##Volmer Rate Equation
-        V1 = k_V * ((thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT))
-        V2 = (np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
-        r_V = V1 * V2
+        r_V = k_V * (thetaA_star ** (1 - beta[0])) * (thetaA_H ** beta[0]) * np.exp(beta[0] * GHad / RT) * (
+                    np.exp(-(beta[0]) * F * (V - U_V) / RT) - np.exp((1 - beta[0]) * F * (V - U_V) / RT))
 
         r_T = 0
         if mechanism_choice == 0:
@@ -139,10 +142,8 @@ if do_dynamic_ghad:
             exp22 = np.exp((1 - beta[1]) * F * (V - U_H) / RT)
             r_H = j1 * (exp21 - exp22)
 
-        T1_index.append(T_1)
-        T2_index.append(T_2)
-        V1_index.append(V1)
-        V2_index.append(V2)
+        # T1_index.append(T_1)
+        # T2_index.append(T_2)
         return r_V, r_T, r_H
 
 
@@ -158,10 +159,11 @@ if do_dynamic_ghad:
             dthetadt = [theta_star_rate / cmax, theta_H_rate / cmax]
         return dthetadt
 
+
     T1_index.clear()
     T2_index.clear()
 
-    soln = solve_ivp(sitebal, duration, theta0, t_eval = t, method ='BDF', dense_output=True, full_output = True)
+    soln = solve_ivp(sitebal, duration, theta0, t_eval = t, method ='BDF')
     theta_at_t = soln.y  # shape: (2, len(t))
     thetaH_array = theta_at_t[1, :]
 
@@ -175,68 +177,76 @@ if do_dynamic_ghad:
 
     print("Solver steps taken:", len(soln.t))
 
-    plt.plot(t, r_V_vals)
-    plt.title("Rate of change of Theta_H over time")
-    plt.xlabel("Time (s)")
-    plt.ylabel("r_V Values")
-    plt.grid()
-    plt.show()
+    # plt.plot(t, thetaH_array, label='Theta H')
+    # plt.title("Rate of change of Theta_H over time")
+    # plt.xlabel("Time (s)")
+    # plt.ylabel("d(Theta_H)/dt")
+    # plt.grid()
+    # plt.show()
 
     cut = 5
     # Plot
-    plt.figure(figsize=(12, 6))
-    plt.subplot(3, 1, 1)
-    plt.plot(t[cut:], curr_dynamic[cut:], label='Volmer Current')
+    plt.figure(figsize=(16, 12))
+    plt.subplot(4, 1, 1)
+    plt.plot(t, curr_dynamic, label='Volmer Current', marker = "o")
     plt.ylabel("Current Density (mA/cm²)")
     plt.title("Dynamic GHad(t): Current vs Time, $k_V$ = {:.2e}, $k_T$ = {:.2e}, period = {:.2e}".format(k_V / cmax, k_T / cmax, period))
     plt.legend()
 
-    plt.subplot(3, 1, 2)
-    plt.plot(t[cut:], GHad_t_eV[cut:])
-    plt.ylabel("GHad (eV)")
-    plt.xlabel("Time (s)")
-    plt.title("Dynamic GHad(t): GHad vs Time")
-    plt.tight_layout()
+    # plt.subplot(4, 1, 2)
+    # plt.plot(t, GHad_t_eV, marker= 'o')
+    # plt.ylabel("GHad (eV)")
+    # plt.xlabel("Time (s)")
+    # plt.title("Dynamic GHad(t): GHad vs Time")
+    # plt.tight_layout()
 
-    plt.subplot(3, 1, 3)
-    plt.ylabel("Coverage (Theta H)")
-    plt.xlabel("Time (s)")
-    plt.title("Dynamic GHad(t): Coverage vs Time")
-    plt.ylim(0, 0.4)
-    plt.plot(t[cut:], thetaH_array[cut:], label='Theta H', color="g")
-    plt.show()
+    # print("Length of theta H array: ", len(thetaH_array))
 
-    plt.figure(figsize=(12,6))
-    plt.plot(t[1:], r_V_vals[1:], label='r_V')
-    plt.plot(t[1:], r_T_vals[1:], label='r_T')
-    plt.grid(True)
-    plt.legend()
-    plt.show()
-    
-    plt.figure(figsize=(12, 6))
-    plt.plot(T1_index, label='T1')
-    plt.plot(T2_index, label='T2')
-    plt.plot(r_T_vals, label='r_T')
-    plt.xlabel("Evaluation index (arbitrary units)")
-    plt.ylabel("Value")
-    plt.title(rf"Sequential Evaluation of T1, T2, and r_T, period = {period} seconds")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # plt.subplot(4, 1, 3)
+    # plt.ylabel("Coverage (Theta H)")
+    # plt.xlabel("Time (s)")
+    # plt.title("Dynamic GHad(t): Coverage vs Time")
+    # plt.ylim(0, 0.4)
+    # plt.plot(t, thetaH_array, label='Theta H', color="g", marker='o')
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(V1_index, label='V1')
-    plt.plot(V2_index, label='V2')
-    plt.plot(r_V_vals[100:2000], label='r_V')
-    plt.plot(t, label = 'Time')
-    plt.xlabel("Evaluation index (arbitrary units)")
-    plt.ylabel("Value")
-    plt.title(rf"Sequential Evaluation of V1, V2, and r_V, period = {period} seconds")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # plt.subplot(4, 1, 4)
+    # plt.ylabel('Time')
+    # plt.xlabel('Index')
+    # plt.title("Time vs Index")
+    # plt.plot(t, marker='o')
+    # plt.grid(True)
+    # plt.tight_layout()
+    # plt.show()
+
+    print("ThetaH Average", np.average(thetaH_array))
+
+    # # Assuming t is already defined
+    # plt.figure(figsize=(8, 4))
+    # plt.plot(t, marker='o')
+    # plt.xlabel("Index")
+    # plt.ylabel("Time (s)")
+    # plt.title("Time Array (t)")
+    # plt.grid(True)
+    # plt.show()
+
+    # plt.figure(figsize=(12,6))
+    # plt.plot(t[1:], r_V_vals[1:], label='r_V')
+    # plt.plot(t[1:], r_T_vals[1:], label='r_T')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.show()
+    #
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(T1_index[100:2000], label='T1')
+    # plt.plot(T2_index[100:2000], label='T2')
+    # plt.plot(r_T_vals[100:2000], label='r_T')
+    # plt.xlabel("Evaluation index (arbitrary units)")
+    # plt.ylabel("Value")
+    # plt.title(rf"Sequential Evaluation of T1, T2, and r_T, period = {period} seconds")
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
 
     print(thetaH_array)
 
@@ -253,17 +263,13 @@ if do_dynamic_ghad:
 
     # Create a DataFrame
     data = {
-        "V1": V1_index,
-        "V2": V2_index,
-        "T1": T1_index,
-        "T2": T2_index,
-        # "r_V_vals": r_V_vals,
-        # "r_T_vals": r_T_vals,
-        # "Theta_H": thetaH_array,
-        # "GHad (eV)": GHad_t_eV,
-        # "Current (mA/cm²)": curr_dynamic
+        "Time (s)": t,
+        "r_V_vals": r_V_vals,
+        "r_T_vals": r_T_vals,
+        "Theta_H": thetaH_array,
+        "GHad (eV)": GHad_t_eV,
+        "Current (mA/cm²)": curr_dynamic
     }
-
     df = pd.DataFrame(data)
 
     # Save to Excel

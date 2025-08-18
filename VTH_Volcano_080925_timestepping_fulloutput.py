@@ -92,6 +92,10 @@ if do_dynamic_ghad:
     #setting potential for static hold
     def potential(t): return -0.1
 
+    #solve for initial coverage after each iteration of solve_ivp
+    def equil_theta(GHad, t):
+        V = potential(0)
+
     #equil
     def eqpot(theta, GHad):
         theta = np.asarray(theta)
@@ -161,7 +165,7 @@ if do_dynamic_ghad:
     T1_index.clear()
     T2_index.clear()
 
-    soln = solve_ivp(sitebal, duration, theta0, t_eval = t, method ='BDF', dense_output=True, full_output = True)
+    soln = solve_ivp(sitebal, duration, theta0, t_eval = t, method ='BDF', dense_output=True)
     theta_at_t = soln.y  # shape: (2, len(t))
     thetaH_array = theta_at_t[1, :]
 
